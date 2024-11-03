@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+Human Tasks:
+1. Verify icon displays correctly across different Android versions (API 21+)
+2. Test icon appearance in both light and dark themes
+3. Validate icon scales properly across different screen densities
+4. Ensure icon meets Google Play Store requirements (512x512 PNG version needed)
+5. Test adaptive icon behavior on different launcher shapes
+-->
+
+<!-- Material Design 3 Adaptive Icon Implementation -->
+<!-- Supports Android 8.0 (API level 26) and above -->
+<vector
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24.0"
+    android:viewportHeight="24.0"
+    android:tint="@color/colorPrimary"
+    android:autoMirrored="true">
+
+    <!-- Requirement: Mobile Applications - Circular background for adaptive icon -->
+    <path
+        android:name="background"
+        android:fillColor="@color/colorPrimary"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"/>
+
+    <!-- Requirement: UI Framework - Material Design compliant foreground elements -->
+    <!-- Kitchen-themed icon elements representing cooking/recipe functionality -->
+    <path
+        android:name="foreground"
+        android:fillColor="#FFFFFF"
+        android:pathData="M11,9H9V7H7V9H5V11H7V13H9V11H11V9M13,9H19V11H13V9M13,13H19V15H13V13Z"/>
+
+    <!-- Content description for accessibility -->
+    <target android:name="background">
+        <description>PantryChef App Icon</description>
+    </target>
+</vector>
