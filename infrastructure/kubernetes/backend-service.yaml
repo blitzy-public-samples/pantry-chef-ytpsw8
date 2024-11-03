@@ -1,0 +1,53 @@
+# HUMAN TASKS:
+# 1. Verify that the service ports match the application configuration in configmap.yaml
+# 2. Ensure Prometheus scraping annotations match your monitoring setup
+# 3. Confirm AWS load balancer annotations with cloud infrastructure team
+# 4. Review session affinity timeout settings for your use case
+# 5. Verify service selectors match your deployment labels
+
+# Requirement: Backend Services Architecture (5.2.2) - Service configuration for backend microservices
+apiVersion: v1
+kind: Service
+metadata:
+  name: pantrychef-backend
+  namespace: production
+  labels:
+    app: pantrychef
+    tier: backend
+    environment: production
+  annotations:
+    # Requirement: System Components (6.4) - Prometheus metrics endpoint configuration
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+    prometheus.io/path: "/metrics"
+    # Requirement: Load Balancing (10.2.1) - AWS NLB configuration
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  # Requirement: High Availability (10.2.2) - Internal cluster service type
+  type: ClusterIP
+  ports:
+    # Requirement: System Components (6.4) - Main API endpoint
+    - name: api
+      port: 80
+      targetPort: 3000  # Maps to PORT in configmap
+      protocol: TCP
+    # Requirement: System Components (6.4) - Image processing service
+    - name: image-processor
+      port: 5000
+      targetPort: 5000  # Maps to IMAGE_PROCESSOR_PORT in configmap
+      protocol: TCP
+    # Requirement: System Components (6.4) - Metrics endpoint
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  # Requirement: Backend Services Architecture (5.2.2) - Service discovery selectors
+  selector:
+    app: pantrychef
+    tier: backend
+  # Requirement: Load Balancing (10.2.1) - Session handling configuration
+  sessionAffinity: None
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hour session timeout
