@@ -1,0 +1,180 @@
+# HUMAN TASKS:
+# 1. Verify container image versions and registry paths
+# 2. Review resource limits and requests based on load testing results
+# 3. Confirm health check endpoints and timing parameters
+# 4. Verify security context user IDs with container images
+# 5. Review pod anti-affinity rules for high availability
+# 6. Ensure monitoring annotations match Prometheus configuration
+
+# Requirement: Backend Services Architecture (5.2.2) - Deployment configuration for microservices
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pantrychef-backend
+  namespace: production
+  labels:
+    app: pantrychef
+    tier: backend
+    environment: production
+  annotations:
+    # Requirement: System Components (6.4) - Deployment tracking
+    kubernetes.io/change-cause: "Initial deployment of backend services"
+    # Requirement: System Components (6.4) - Prometheus metrics configuration
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  # Requirement: High Availability (10.2.2) - Multi-replica deployment
+  replicas: 3
+  # Requirement: High Availability (10.2.2) - Zero-downtime deployment strategy
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  # Requirement: Backend Services Architecture (5.2.2) - Pod selector
+  selector:
+    matchLabels:
+      app: pantrychef
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: pantrychef
+        tier: backend
+    spec:
+      # Requirement: High Availability (10.2.2) - Pod anti-affinity for HA
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - pantrychef
+              topologyKey: kubernetes.io/hostname
+      containers:
+      # Requirement: Backend Services Architecture (5.2.2) - Main API service container
+      - name: api-service
+        image: pantrychef/backend-api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+          name: http
+        - containerPort: 9090
+          protocol: TCP
+          name: metrics
+        # Requirement: Resource Management (10.4.1) - Resource allocation
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        # Requirement: High Availability (10.2.2) - Health checks
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/v1/ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        # Requirement: Backend Services Architecture (5.2.2) - Configuration and secrets
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secrets
+        # Requirement: Security Considerations (9.2) - Container security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /cache
+
+      # Requirement: Backend Services Architecture (5.2.2) - Image processing service
+      - name: image-processor
+        image: pantrychef/image-processor:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          protocol: TCP
+          name: http
+        # Requirement: Resource Management (10.4.1) - Resource allocation
+        resources:
+          requests:
+            cpu: "4"
+            memory: "8Gi"
+          limits:
+            cpu: "8"
+            memory: "16Gi"
+        # Requirement: High Availability (10.2.2) - Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        # Requirement: Security Considerations (9.2) - Container security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: models
+          mountPath: /models
+
+      # Requirement: Security Considerations (9.2) - Pod security context
+      securityContext:
+        fsGroup: 1000
+      
+      # Requirement: High Availability (10.2.2) - Graceful shutdown
+      terminationGracePeriodSeconds: 60
+      
+      # Requirement: Container Orchestration (10.3) - Volumes
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      - name: models
+        persistentVolumeClaim:
+          claimName: model-storage
+
+      # Requirement: Container Orchestration (10.3) - Image pull secrets
+      imagePullSecrets:
+      - name: registry-credentials
