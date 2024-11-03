@@ -1,0 +1,122 @@
+# Human Tasks:
+# 1. Verify storage class 'standard' exists in your cluster
+# 2. Ensure network policies allow required RabbitMQ ports (5672, 15672, 4369, 25672)
+# 3. Configure monitoring for RabbitMQ metrics using Prometheus
+# 4. Set up log aggregation for RabbitMQ logs
+# 5. Review resource limits based on production workload
+# 6. Configure backup strategy for RabbitMQ persistent volumes
+
+# Requirement: Message Queue Infrastructure (5.1 High-Level Architecture Overview)
+# RabbitMQ StatefulSet for asynchronous processing
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: production
+  labels:
+    app: pantrychef
+    service: rabbitmq
+    component: message-queue
+spec:
+  # Requirement: High Availability Architecture (10.2.2)
+  # Multi-node RabbitMQ cluster for high availability
+  replicas: 3
+  serviceName: rabbitmq-headless
+  selector:
+    matchLabels:
+      app: pantrychef
+      service: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: pantrychef
+        service: rabbitmq
+    spec:
+      containers:
+      - name: rabbitmq
+        # Requirement: System Components (7.3)
+        # RabbitMQ container with management plugin
+        image: rabbitmq:3.11-management
+        ports:
+        - name: amqp
+          containerPort: 5672
+          protocol: TCP
+        - name: management
+          containerPort: 15672
+          protocol: TCP
+        - name: epmd
+          containerPort: 4369
+          protocol: TCP
+        - name: cluster
+          containerPort: 25672
+          protocol: TCP
+        env:
+        # Requirement: Component Specifications (6.4)
+        # RabbitMQ cluster configuration and authentication
+        - name: RABBITMQ_ERLANG_COOKIE
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: RABBITMQ_ERLANG_COOKIE
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: RABBITMQ_USERNAME
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: RABBITMQ_PASSWORD
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/rabbitmq
+        - name: config
+          mountPath: /etc/rabbitmq
+        # Requirement: High Availability Architecture (10.2.2)
+        # Health checks for automatic failover
+        livenessProbe:
+          exec:
+            command: ["rabbitmq-diagnostics", "status"]
+          initialDelaySeconds: 60
+          periodSeconds: 60
+          timeoutSeconds: 15
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command: ["rabbitmq-diagnostics", "check_port_connectivity"]
+          initialDelaySeconds: 20
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command: ["rabbitmqctl", "stop"]
+      volumes:
+      - name: config
+        configMap:
+          name: rabbitmq-config
+      terminationGracePeriodSeconds: 60
+  # Requirement: High Availability Architecture (10.2.2)
+  # Persistent storage for message queue data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: "10Gi"
+  # Requirement: High Availability Architecture (10.2.2)
+  # Rolling update strategy for zero-downtime updates
+  updateStrategy:
+    type: RollingUpdate
