@@ -1,0 +1,106 @@
+# HUMAN TASKS:
+# 1. Verify Redis password is securely stored in Kubernetes secrets
+# 2. Ensure Redis service name matches the REDIS_HOST in configmap
+# 3. Review storage class configuration for your cluster
+# 4. Adjust resource limits based on production workload
+# 5. Configure network policies for Redis access
+# 6. Set up monitoring for Redis metrics
+# 7. Configure backup strategy for Redis persistence
+
+# Requirement: Cache Layer Implementation (7.3) - Redis deployment for session management and caching
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: production
+  labels:
+    app: pantrychef
+    component: cache
+    environment: production
+    managed-by: terraform
+spec:
+  # Requirement: High Availability Architecture (10.2.2) - Multi-node Redis cluster configuration
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pantrychef
+      component: cache
+  serviceName: redis
+  template:
+    metadata:
+      labels:
+        app: pantrychef
+        component: cache
+    spec:
+      # Requirement: Infrastructure Scalability (10.1) - Redis container configuration
+      containers:
+      - name: redis
+        # Redis server container image with Alpine Linux base for smaller footprint
+        image: redis:6.2-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        env:
+        # Requirement: Data Security - Redis authentication configuration
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: REDIS_PASSWORD
+        - name: REDIS_CLUSTER_MODE
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: REDIS_CLUSTER_MODE
+        # Requirement: Infrastructure Scalability - Resource allocation
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        volumeMounts:
+        # Requirement: Infrastructure Scalability - Persistent storage configuration
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /usr/local/etc/redis
+        # Requirement: High Availability Architecture - Health monitoring
+        livenessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      # Requirement: Performance Optimization - Redis configuration from ConfigMap
+      - name: redis-config
+        configMap:
+          name: app-config
+      # Requirement: Data Security - Security context configuration
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+  # Requirement: Infrastructure Scalability - Persistent volume claims
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 10Gi
+  # Requirement: High Availability Architecture - Update strategy
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
