@@ -1,0 +1,81 @@
+# Human Tasks:
+# 1. Verify SSL certificate issuer 'letsencrypt-prod' is configured in cert-manager
+# 2. Ensure DNS records for api.pantrychef.com and app.pantrychef.com are configured
+# 3. Review CORS allowed origins configuration for production environment
+# 4. Confirm rate limiting settings with the infrastructure team
+# 5. Verify WAF rules are properly configured on the cloud provider level
+
+# Requirement: API Gateway (5.1) - Entry point for all client-side requests
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pantrychef-ingress
+  namespace: production
+  labels:
+    app: pantrychef
+    environment: production
+  annotations:
+    # Requirement: Load Balancing (10.2.1) - NGINX Ingress Controller configuration
+    kubernetes.io/ingress.class: "nginx"
+    
+    # Requirement: SSL/TLS Configuration (9.2.1) - TLS certificate management
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    
+    # Requirement: Load Balancing (10.2.1) - Request handling configuration
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    
+    # Requirement: API Gateway (5.1) - CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    
+    # Requirement: Security Protocols (9.3) - Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+
+spec:
+  # Requirement: SSL/TLS Configuration (9.2.1) - TLS configuration
+  tls:
+    - hosts:
+        - api.pantrychef.com
+        - app.pantrychef.com
+      secretName: pantrychef-tls
+
+  # Requirement: API Gateway (5.1) - Routing rules configuration
+  rules:
+    # Requirement: API Gateway (5.1) - Backend API routing
+    - host: api.pantrychef.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pantrychef-backend
+                port:
+                  name: api
+          - path: /image-processing
+            pathType: Prefix
+            backend:
+              service:
+                name: pantrychef-backend
+                port:
+                  name: image-processor
+
+    # Requirement: API Gateway (5.1) - Web application routing
+    - host: app.pantrychef.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pantrychef-web
+                port:
+                  name: http
