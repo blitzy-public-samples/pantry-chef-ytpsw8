@@ -1,0 +1,227 @@
+# Requirement: CI/CD Pipeline - Automated deployment workflow for backend services
+# Location: 10.5 CI/CD Pipeline/10.5.1 Pipeline Architecture
+name: Backend Deployment
+
+# Human Tasks:
+# 1. Configure AWS credentials in GitHub repository secrets
+# 2. Set up ECR repositories for each service
+# 3. Create ECS cluster and task definitions
+# 4. Configure CloudWatch log groups
+# 5. Set up required security groups and VPC settings
+# 6. Configure environment variables in GitHub secrets
+# 7. Set up auto-scaling policies in AWS console
+# 8. Configure CloudWatch alarms for monitoring
+
+# Requirement: CI/CD Pipeline - Deployment triggers
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/backend/**'
+  workflow_dispatch:
+    description: 'Manual trigger for deployment'
+
+# Requirement: CI/CD Pipeline - Concurrency control for deployments
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+# Requirement: CI/CD Pipeline - Environment variables
+env:
+  AWS_REGION: us-west-2
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  ECR_REPOSITORY: pantrychef-backend
+  ECS_CLUSTER: pantrychef
+  ECS_SERVICE: pantrychef-api
+  ECS_TASK_DEFINITION: pantrychef-api
+  CONTAINER_NAME: api
+  MIN_HEALTHY_PERCENT: 50
+  MAX_PERCENT: 200
+  HEALTH_CHECK_URL: /health
+  NODE_ENV: production
+
+# Requirement: CI/CD Pipeline - Deployment jobs
+jobs:
+  deploy:
+    name: Deploy Backend Services
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      # Requirement: CI/CD Pipeline - Code checkout
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      # Requirement: CI/CD Pipeline - Node.js setup
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+          cache-dependency-path: src/backend/package.json
+      
+      # Requirement: CI/CD Pipeline - AWS credentials configuration
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      # Requirement: Container Deployment - ECR login
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      # Requirement: Container Deployment - Docker Buildx setup
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      # Requirement: Container Deployment - Build and push Docker images
+      - name: Build and push Docker images
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build images with proper resource limits
+          docker buildx create --use
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg NODE_ENV=${{ env.NODE_ENV }} \
+            --build-arg BUILD_VERSION=${{ github.sha }} \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+            -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest \
+            --cache-from type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:buildcache \
+            --cache-to type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:buildcache,mode=max \
+            --push \
+            src/backend
+      
+      # Requirement: AWS ECS Configuration - Update task definition
+      - name: Update ECS task definition
+        run: |
+          # Get current task definition
+          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION }} --region ${{ env.AWS_REGION }})
+          
+          # Create new task definition
+          echo "$TASK_DEFINITION" | \
+          jq --arg IMAGE "${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" \
+             --arg CPU "2048" \
+             --arg MEMORY "4096" \
+             '.taskDefinition | .containerDefinitions[0].image = $IMAGE | .cpu = $CPU | .memory = $MEMORY' > task-definition.json
+          
+          # Register new task definition
+          NEW_TASK_DEFINITION=$(aws ecs register-task-definition \
+            --region ${{ env.AWS_REGION }} \
+            --cli-input-json file://task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          
+          echo "NEW_TASK_DEFINITION=$NEW_TASK_DEFINITION" >> $GITHUB_ENV
+      
+      # Requirement: Container Deployment - Deploy to ECS with blue-green strategy
+      - name: Deploy to ECS cluster
+        run: |
+          # Store current task definition for potential rollback
+          CURRENT_TASK_DEFINITION=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --query 'services[0].taskDefinition' \
+            --output text)
+          
+          echo "CURRENT_TASK_DEFINITION=$CURRENT_TASK_DEFINITION" >> $GITHUB_ENV
+          
+          # Update service with new task definition
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --task-definition ${{ env.NEW_TASK_DEFINITION }} \
+            --desired-count 2 \
+            --deployment-configuration "maximumPercent=${{ env.MAX_PERCENT }},minimumHealthyPercent=${{ env.MIN_HEALTHY_PERCENT }}" \
+            --force-new-deployment
+      
+      # Requirement: Container Deployment - Health check verification
+      - name: Verify deployment health
+        run: |
+          # Wait for service stability
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }}
+          
+          # Get service URL
+          SERVICE_URL=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} \
+            --query 'services[0].loadBalancers[0].targetGroupArn' \
+            --output text)
+          
+          # Check health endpoint
+          for i in {1..30}; do
+            HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SERVICE_URL${{ env.HEALTH_CHECK_URL }})
+            if [ "$HEALTH_STATUS" = "200" ]; then
+              echo "Health check passed"
+              exit 0
+            fi
+            sleep 10
+          done
+          
+          echo "Health check failed"
+          exit 1
+      
+      # Requirement: Container Deployment - Rollback on failure
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, rolling back to ${{ env.CURRENT_TASK_DEFINITION }}"
+          
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --task-definition ${{ env.CURRENT_TASK_DEFINITION }} \
+            --force-new-deployment
+          
+          # Wait for rollback to complete
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }}
+      
+      # Requirement: AWS ECS Configuration - Configure auto-scaling
+      - name: Configure auto-scaling
+        run: |
+          aws application-autoscaling register-scalable-target \
+            --service-namespace ecs \
+            --scalable-dimension ecs:service:DesiredCount \
+            --resource-id service/${{ env.ECS_CLUSTER }}/${{ env.ECS_SERVICE }} \
+            --min-capacity 1 \
+            --max-capacity 4
+          
+          # CPU-based scaling policy
+          aws application-autoscaling put-scaling-policy \
+            --service-namespace ecs \
+            --scalable-dimension ecs:service:DesiredCount \
+            --resource-id service/${{ env.ECS_CLUSTER }}/${{ env.ECS_SERVICE }} \
+            --policy-name cpu-tracking \
+            --policy-type TargetTrackingScaling \
+            --target-tracking-scaling-policy-configuration '{
+              "TargetValue": 70.0,
+              "PredefinedMetricSpecification": {
+                "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+              },
+              "ScaleOutCooldown": 300,
+              "ScaleInCooldown": 300
+            }'
+      
+      # Requirement: AWS ECS Configuration - Update CloudWatch alarms
+      - name: Update CloudWatch alarms
+        run: |
+          aws cloudwatch put-metric-alarm \
+            --alarm-name "${{ env.ECS_SERVICE }}-cpu-high" \
+            --alarm-description "CPU utilization high" \
+            --metric-name CPUUtilization \
+            --namespace AWS/ECS \
+            --statistic Average \
+            --period 300 \
+            --threshold 85 \
+            --comparison-operator GreaterThanThreshold \
+            --dimensions Name=ClusterName,Value=${{ env.ECS_CLUSTER }} Name=ServiceName,Value=${{ env.ECS_SERVICE }} \
+            --evaluation-periods 2 \
+            --alarm-actions ${{ secrets.ALARM_TOPIC_ARN }} \
+            --ok-actions ${{ secrets.ALARM_TOPIC_ARN }}
