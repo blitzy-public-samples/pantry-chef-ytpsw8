@@ -1,0 +1,89 @@
+# Minimum iOS deployment target as specified in technical requirements section 1.1
+platform :ios, '13.0'
+
+# Enable dynamic frameworks for Swift dependency integration
+use_frameworks!
+
+# Define workspace
+workspace 'PantryChef.xcworkspace'
+
+# Main target configuration
+target 'PantryChef' do
+  # Networking library for RESTful API communication
+  # version ~> 5.0
+  pod 'Alamofire', '~> 5.0'
+  
+  # Asynchronous image loading and caching
+  # version ~> 5.0
+  pod 'SDWebImage', '~> 5.0'
+  
+  # Secure credential storage using iOS Keychain
+  # version ~> 4.0
+  pod 'KeychainAccess', '~> 4.0'
+  
+  # JSON parsing and manipulation
+  # version ~> 5.0
+  pod 'SwiftyJSON', '~> 5.0'
+  
+  # Real-time WebSocket communication for live updates
+  # version ~> 16.0
+  pod 'SocketIO', '~> 16.0'
+  
+  # On-device machine learning for ingredient recognition
+  # version ~> 2.7.0
+  pod 'TensorFlowLiteSwift', '~> 2.7.0'
+  
+  # Reactive programming framework for async operations
+  # version ~> 6.0
+  pod 'RxSwift', '~> 6.0'
+  
+  # Reactive extensions for UIKit
+  # version ~> 6.0
+  pod 'RxCocoa', '~> 6.0'
+  
+  # Firebase dependencies for analytics and push notifications
+  # version ~> 9.0
+  pod 'Firebase/Analytics', '~> 9.0'
+  pod 'Firebase/Messaging', '~> 9.0'
+  
+  # Development configuration
+  config = use_native_modules!
+  debug_configuration = config.debug_dev_pods_configuration || :debug
+  
+  if debug_configuration == :debug
+    # Code quality checks during development
+    # version ~> 0.45
+    pod 'SwiftLint', '~> 0.45'
+  end
+  
+  # Test configuration
+  target 'PantryChefTests' do
+    inherit! :search_paths
+    
+    # BDD testing framework
+    # version ~> 5.0
+    pod 'Quick', '~> 5.0'
+    
+    # Matcher framework for unit tests
+    # version ~> 10.0
+    pod 'Nimble', '~> 10.0'
+  end
+end
+
+# Post install configuration
+post_install do |installer|
+  # Enable minimum deployment target for all pods
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      
+      # Enable required build settings for Apple Silicon
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    end
+  end
+  
+  # Apply Swift version to all pods
+  installer.pods_project.build_configurations.each do |config|
+    config.build_settings['SWIFT_VERSION'] = '5.0'
+  end
+end
