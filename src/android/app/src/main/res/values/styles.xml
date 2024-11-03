@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+Human Tasks:
+1. Ensure Material Design library (com.google.android.material:material:1.5.0) is included in app/build.gradle
+2. Verify dynamic colors are enabled in Android 12+ theme configuration
+3. Test theme appearance in both light and dark modes
+4. Validate accessibility color contrast ratios
+-->
+
+<!-- Material Design library version: 1.5.0 -->
+<resources>
+    <!-- Requirement: UI Framework Integration - Material Design theme implementation -->
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary theme colors -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        
+        <!-- System UI colors -->
+        <item name="android:windowBackground">@color/colorBackground</item>
+        <item name="android:statusBarColor">@color/statusBarColor</item>
+        <item name="android:navigationBarColor">@color/navigationBarColor</item>
+        
+        <!-- Surface and text colors -->
+        <item name="colorSurface">@color/colorSurface</item>
+        <item name="android:textColorPrimary">@color/textColorPrimary</item>
+        <item name="android:textColorSecondary">@color/textColorSecondary</item>
+        
+        <!-- Component styles -->
+        <item name="materialButtonStyle">@style/CustomButton</item>
+        <item name="textInputStyle">@style/CustomTextField</item>
+    </style>
+
+    <!-- Requirement: Mobile-First Design - Splash screen theme -->
+    <style name="AppTheme.Launcher" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+
+    <!-- Requirement: UI Framework Integration - Action bar overlay theme -->
+    <style name="AppTheme.AppBarOverlay" parent="ThemeOverlay.MaterialComponents.Light.ActionBar">
+        <item name="elevation">4dp</item>
+    </style>
+
+    <!-- Requirement: UI Framework Integration - Popup menu overlay theme -->
+    <style name="AppTheme.PopupOverlay" parent="ThemeOverlay.MaterialComponents.Light">
+        <item name="android:background">@color/colorSurface</item>
+    </style>
+
+    <!-- Requirement: Mobile-First Design - Custom button style -->
+    <style name="CustomButton" parent="Widget.MaterialComponents.Button">
+        <item name="android:minHeight">56dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/textColorPrimary</item>
+        <item name="rippleColor">@color/rippleColor</item>
+        <item name="android:padding">16dp</item>
+        <item name="cornerRadius">8dp</item>
+    </style>
+
+    <!-- Requirement: Mobile-First Design - Custom text field style -->
+    <style name="CustomTextField" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="android:textSize">16sp</item>
+        <item name="android:padding">16dp</item>
+        <item name="android:textColor">@color/textColorPrimary</item>
+        <item name="android:textColorHint">@color/textColorSecondary</item>
+        <item name="boxStrokeColor">@color/colorAccent</item>
+        <item name="boxCornerRadius">8dp</item>
+        <item name="errorTextColor">@color/colorError</item>
+    </style>
+</resources>
