@@ -1,0 +1,178 @@
+# Requirement: Containerization - Defines the multi-container application architecture
+version: '3.8'
+
+# Requirement: High Availability Architecture - Configures service dependencies and networking
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: ../../src/backend
+      dockerfile: ../../infrastructure/docker/backend.dockerfile
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_URI=mongodb://admin:secret@mongodb:27017/pantrychef
+      - REDIS_URL=redis://redis:6379
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - RABBITMQ_URL=amqp://admin:secret@rabbitmq:5672
+      - TZ=UTC
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./logs:/app/logs:rw
+      - ./uploads:/app/uploads:rw
+    depends_on:
+      - mongodb
+      - redis
+      - elasticsearch
+      - rabbitmq
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://localhost:3000/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - pantrychef_network
+
+  # Web Dashboard Service
+  web:
+    build:
+      context: ../../src/web
+      dockerfile: ../../infrastructure/docker/web.dockerfile
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - API_URL=http://backend:3000
+      - WS_URL=ws://backend:3000
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: curl --fail http://localhost:80/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - pantrychef_network
+
+  # MongoDB Database Service
+  mongodb:
+    image: mongo:5.0
+    volumes:
+      - mongodb_data:/data/db:rw
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=secret
+      - MONGO_INITDB_DATABASE=pantrychef
+    restart: unless-stopped
+    command: mongod --wiredTigerCacheSizeGB 1
+    ulimits:
+      nofile:
+        soft: 64000
+        hard: 64000
+    networks:
+      - pantrychef_network
+
+  # Redis Cache Service
+  redis:
+    image: redis:6.2-alpine
+    volumes:
+      - redis_data:/data:rw
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    sysctls:
+      net.core.somaxconn: 1024
+    networks:
+      - pantrychef_network
+
+  # Elasticsearch Search Engine Service
+  elasticsearch:
+    image: elasticsearch:7.17.0
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data:rw
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+      - bootstrap.memory_lock=true
+    restart: unless-stopped
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      - pantrychef_network
+
+  # RabbitMQ Message Queue Service
+  rabbitmq:
+    image: rabbitmq:3.9-management-alpine
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq:rw
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=secret
+      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6
+    restart: unless-stopped
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - pantrychef_network
+
+# Requirement: Development Environment - Provides persistent storage volumes
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+# Requirement: Security Architecture - Implements network isolation
+networks:
+  pantrychef_network:
+    driver: bridge
+    internal: true
+    enable_ipv6: false
+    driver_opts:
+      com.docker.network.bridge.name: pantrychef_net
+      com.docker.network.driver.mtu: '1500'
