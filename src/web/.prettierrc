@@ -1,0 +1,39 @@
+{
+  // Human Tasks:
+  // 1. Ensure @trivago/prettier-plugin-sort-imports is installed via npm/yarn
+  // 2. Configure VS Code to use Prettier as the default formatter
+  // 3. Add format scripts to package.json: "format": "prettier --write \"src/**/*.{ts,tsx}\""
+  // 4. Set up pre-commit hooks with husky to run Prettier
+
+  // @prettier
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "quoteProps": "as-needed",
+  "jsxSingleQuote": false,
+  "trailingComma": "es5",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "avoid",
+  
+  // Import sorting configuration using @trivago/prettier-plugin-sort-imports
+  "importOrder": [
+    "^@/(.*)$",
+    "^@components/(.*)$", 
+    "^@hooks/(.*)$",
+    "^@services/(.*)$",
+    "^@utils/(.*)$",
+    "^@interfaces/(.*)$",
+    "^@config/(.*)$",
+    "^@store/(.*)$",
+    "^@styles/(.*)$",
+    "^[./]"
+  ],
+  "importOrderSeparation": true,
+  "importOrderSortSpecifiers": true,
+  
+  // Line endings configuration
+  "endOfLine": "lf"
+}
