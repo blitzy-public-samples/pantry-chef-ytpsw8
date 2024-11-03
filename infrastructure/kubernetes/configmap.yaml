@@ -1,0 +1,51 @@
+# Human Tasks:
+# 1. Verify that the MongoDB, Redis, Elasticsearch and RabbitMQ service names match your Kubernetes service resources
+# 2. Confirm AWS region and S3 bucket name with cloud infrastructure team
+# 3. Update CORS_ALLOWED_ORIGINS with actual production domain names
+# 4. Review rate limits and cache TTL values for production workload
+
+# Kubernetes API Version: v1.24+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: production
+  labels:
+    app: pantrychef
+    environment: production
+data:
+  # Requirement: Backend Services Configuration - Environment settings
+  NODE_ENV: "production"
+  PORT: "3000"
+  IMAGE_PROCESSOR_PORT: "5000"
+  
+  # Requirement: System Components Configuration - MongoDB settings
+  MONGODB_HOST: "mongodb-service"
+  MONGODB_PORT: "27017"
+  
+  # Requirement: System Components Configuration - Redis settings
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  
+  # Requirement: System Components Configuration - Elasticsearch settings
+  ELASTICSEARCH_HOST: "elasticsearch-service"
+  ELASTICSEARCH_PORT: "9200"
+  
+  # Requirement: System Components Configuration - RabbitMQ settings
+  RABBITMQ_HOST: "rabbitmq-service"
+  RABBITMQ_PORT: "5672"
+  
+  # Requirement: Service Integration - AWS service configuration
+  AWS_REGION: "us-east-1"
+  S3_BUCKET: "pantrychef-storage"
+  
+  # Requirement: Backend Services Configuration - Application settings
+  LOG_LEVEL: "info"
+  API_RATE_LIMIT: "100"
+  IMAGE_UPLOAD_SIZE_LIMIT: "10485760"
+  CORS_ALLOWED_ORIGINS: "https://app.pantrychef.com,https://api.pantrychef.com"
+  WEBSOCKET_PORT: "8080"
+  
+  # Requirement: Infrastructure Configuration - Performance settings
+  CACHE_TTL: "3600"
+  RECIPE_SEARCH_LIMIT: "50"
