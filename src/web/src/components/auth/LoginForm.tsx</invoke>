@@ -1,0 +1,216 @@
+/**
+ * HUMAN TASKS:
+ * 1. Configure OAuth2.0 providers in environment variables
+ * 2. Set up JWT secret and expiration times in configuration
+ * 3. Configure SSL certificates for secure authentication
+ * 4. Set up error tracking service (e.g., Sentry) for authentication failures
+ */
+
+import React from 'react';
+// @version react ^18.0.0
+import { useForm } from 'react-hook-form';
+// @version react-hook-form ^7.0.0
+import { useNavigate } from 'react-router-dom';
+// @version react-router-dom ^6.0.0
+
+// Internal imports
+import { LoginCredentials } from '../../interfaces/auth.interface';
+import { useAuth } from '../../hooks/useAuth';
+import Input from '../common/Input';
+
+interface LoginFormProps {
+  className?: string;
+  onSuccess?: () => void;
+}
+
+/**
+ * LoginForm component that implements JWT and OAuth2.0 authentication
+ * Requirements addressed:
+ * - Authentication Service: Implements frontend interface for Authentication Service
+ * - Security Protocols: Implements JWT + OAuth2.0 authentication flow
+ * - Data Validation: Input validation for login credentials
+ */
+export const LoginForm: React.FC<LoginFormProps> = ({ className, onSuccess }) => {
+  const navigate = useNavigate();
+  const { login, loading, error, isAuthenticated } = useAuth();
+
+  // Initialize form handling with validation
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError
+  } = useForm<LoginCredentials>({
+    defaultValues: {
+      email: '',
+      password: '',
+      rememberMe: false
+    }
+  });
+
+  /**
+   * Handles form submission and JWT authentication flow
+   * Requirements addressed:
+   * - Authentication Service: JWT token handling
+   * - Security Protocols: Secure session management
+   */
+  const onSubmit = async (data: LoginCredentials) => {
+    try {
+      await login(data);
+      
+      // Handle successful authentication
+      if (onSuccess) {
+        onSuccess();
+      }
+      
+      // Navigate to dashboard on success
+      navigate('/dashboard');
+    } catch (err) {
+      // Handle authentication errors
+      setError('root', {
+        type: 'manual',
+        message: 'Authentication failed. Please check your credentials.'
+      });
+    }
+  };
+
+  // Redirect if already authenticated
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
+  return (
+    <form 
+      onSubmit={handleSubmit(onSubmit)}
+      className={`${className} space-y-6 max-w-md mx-auto`}
+      noValidate
+    >
+      {/* Email Input */}
+      <Input
+        id="email"
+        type="email"
+        label="Email Address"
+        error={errors.email?.message}
+        required
+        {...register('email', {
+          required: 'Email is required',
+          pattern: {
+            value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+            message: 'Invalid email address'
+          }
+        })}
+      />
+
+      {/* Password Input */}
+      <Input
+        id="password"
+        type="password"
+        label="Password"
+        error={errors.password?.message}
+        required
+        {...register('password', {
+          required: 'Password is required',
+          minLength: {
+            value: 8,
+            message: 'Password must be at least 8 characters'
+          }
+        })}
+      />
+
+      {/* Remember Me Checkbox */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <input
+            id="rememberMe"
+            type="checkbox"
+            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            {...register('rememberMe')}
+          />
+          <label 
+            htmlFor="rememberMe" 
+            className="ml-2 block text-sm text-gray-900"
+          >
+            Remember me
+          </label>
+        </div>
+
+        {/* Password Reset Link */}
+        <div className="text-sm">
+          <a 
+            href="/forgot-password"
+            className="font-medium text-primary-600 hover:text-primary-500"
+          >
+            Forgot your password?
+          </a>
+        </div>
+      </div>
+
+      {/* Error Message */}
+      {(error || errors.root) && (
+        <div 
+          className="text-error-main text-sm mt-2" 
+          role="alert"
+        >
+          {error || errors.root?.message}
+        </div>
+      )}
+
+      {/* Submit Button */}
+      <button
+        type="submit"
+        disabled={loading}
+        className={`
+          w-full flex justify-center py-2 px-4 border border-transparent rounded-md
+          shadow-sm text-sm font-medium text-white
+          ${loading 
+            ? 'bg-primary-400 cursor-not-allowed' 
+            : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+          }
+        `}
+      >
+        {loading ? (
+          <span className="flex items-center">
+            <svg 
+              className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" 
+              xmlns="http://www.w3.org/2000/svg" 
+              fill="none" 
+              viewBox="0 0 24 24"
+            >
+              <circle 
+                className="opacity-25" 
+                cx="12" 
+                cy="12" 
+                r="10" 
+                stroke="currentColor" 
+                strokeWidth="4"
+              />
+              <path 
+                className="opacity-75" 
+                fill="currentColor" 
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            Signing in...
+          </span>
+        ) : (
+          'Sign in'
+        )}
+      </button>
+
+      {/* Sign Up Link */}
+      <div className="text-sm text-center mt-4">
+        <span className="text-gray-600">Don't have an account? </span>
+        <a 
+          href="/signup"
+          className="font-medium text-primary-600 hover:text-primary-500"
+        >
+          Sign up
+        </a>
+      </div>
+    </form>
+  );
+};
+
+export default LoginForm;
