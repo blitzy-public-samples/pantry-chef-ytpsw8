@@ -1,0 +1,28 @@
+# Human Tasks:
+# 1. Verify that the sitemap URL is correctly pointing to the production domain
+# 2. Ensure CloudFront CDN is configured to serve this file with the correct cache-control headers
+# 3. Confirm that security headers are properly set in CloudFront distribution
+
+# Global crawler directives
+User-agent: *
+Allow: /
+Allow: /assets/
+Allow: /manifest.json
+Allow: /favicon.ico
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /_next/
+Disallow: /*.json$
+Crawl-delay: 10
+
+# Google-specific directives
+User-agent: Googlebot
+Allow: /
+Allow: /assets/
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /_next/
+Disallow: /*.json$
+
+# Sitemap declaration
+Sitemap: https://pantrychef.com/sitemap.xml
