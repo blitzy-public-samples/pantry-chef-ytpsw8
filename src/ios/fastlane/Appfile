@@ -1,0 +1,27 @@
+# Human Tasks:
+# 1. Replace the placeholder values with actual Apple Developer credentials
+# 2. Ensure Apple Developer Program membership is active
+# 3. Configure App Store Connect access with appropriate permissions
+# 4. Set up environment variables in CI/CD pipeline for sensitive credentials
+
+# fastlane version: ^2.210.0
+# Configuration file for iOS app-specific identifiers and credentials
+
+# Requirement: iOS Native Application (1.1 System Overview/Core Capabilities)
+# Bundle identifier for the PantryChef iOS application following reverse-domain naming convention
+app_identifier("com.pantrychef.ios")
+
+# Requirement: Security Architecture (5.6 Security Architecture/Access Control Measures)
+# Apple ID used for accessing Apple Developer portal and managing app signing certificates
+apple_id("developer@pantrychef.com")
+
+# Requirement: Security Architecture (5.6 Security Architecture/Access Control Measures)
+# Apple Developer Team identifier for managing development and distribution certificates
+team_id("ABCD12345E")
+
+# Requirement: Security Architecture (5.6 Security Architecture/Access Control Measures)
+# App Store Connect Team identifier for managing app distribution and releases
+itc_team_id("123456789")
+
+# For more information about the Appfile, see:
+# https://docs.fastlane.tools/advanced/#appfile
