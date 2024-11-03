@@ -1,0 +1,108 @@
+# HUMAN TASKS:
+# 1. Verify the storage class 'standard' exists in your cluster
+# 2. Ensure network policies allow communication between Elasticsearch nodes
+# 3. Configure backup snapshots to S3 using AWS credentials
+# 4. Review and adjust JVM heap size based on node capacity
+# 5. Set up monitoring for Elasticsearch cluster health
+# 6. Configure index lifecycle policies for data retention
+
+# Requirement: Search Engine Infrastructure (7.3) - Elasticsearch deployment for recipe search
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: production
+  labels:
+    app: pantrychef
+    service: elasticsearch
+    environment: production
+spec:
+  # Requirement: High Availability Architecture (10.2.2) - Multi-node cluster configuration
+  replicas: 3
+  serviceName: elasticsearch
+  selector:
+    matchLabels:
+      app: pantrychef
+      service: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: pantrychef
+        service: elasticsearch
+    spec:
+      # Requirement: System Performance (Appendix C) - Resource optimization for high throughput
+      initContainers:
+        # Fix permissions for Elasticsearch data directory
+        - name: fix-permissions
+          image: busybox
+          command: ['sh', '-c', 'chown -R 1000:1000 /usr/share/elasticsearch/data']
+          volumeMounts:
+            - name: elasticsearch-data
+              mountPath: /usr/share/elasticsearch/data
+        # Configure system settings for Elasticsearch
+        - name: increase-vm-max-map
+          image: busybox
+          command: ['sysctl', '-w', 'vm.max_map_count=262144']
+          securityContext:
+            privileged: true
+      containers:
+        - name: elasticsearch
+          # Requirement: Search Engine Infrastructure (7.3) - Elasticsearch version
+          image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+          ports:
+            - containerPort: 9200
+              name: http
+            - containerPort: 9300
+              name: transport
+          # Load configuration from ConfigMap and Secrets
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          env:
+            # Requirement: High Availability Architecture (10.2.2) - Cluster configuration
+            - name: cluster.name
+              value: pantrychef-es-cluster
+            - name: node.name
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: discovery.seed_hosts
+              value: "elasticsearch-0.elasticsearch,elasticsearch-1.elasticsearch,elasticsearch-2.elasticsearch"
+            - name: cluster.initial_master_nodes
+              value: "elasticsearch-0,elasticsearch-1,elasticsearch-2"
+            # Requirement: System Performance (Appendix C) - JVM optimization
+            - name: ES_JAVA_OPTS
+              value: "-Xms4g -Xmx4g"
+            # Security configuration
+            - name: xpack.security.enabled
+              value: "true"
+            # Requirement: System Performance (Appendix C) - Query performance optimization
+            - name: indices.query.bool.max_clause_count
+              value: "2048"
+          # Requirement: System Performance (Appendix C) - Resource allocation
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+          volumeMounts:
+            - name: elasticsearch-data
+              mountPath: /usr/share/elasticsearch/data
+      volumes:
+        - name: elasticsearch-data
+          persistentVolumeClaim:
+            claimName: elasticsearch-data
+  # Requirement: High Availability Architecture (10.2.2) - Persistent storage configuration
+  volumeClaimTemplates:
+    - metadata:
+        name: elasticsearch-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Gi
+        storageClassName: standard
