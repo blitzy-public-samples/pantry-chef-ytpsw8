@@ -1,0 +1,167 @@
+# Requirement: iOS CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+# GitHub Actions workflow for automated building, testing and validation of PantryChef iOS app
+name: iOS Build
+
+# Requirement: iOS Platform Support (1.2 Scope/System Boundaries)
+# Trigger workflow on push and pull request events for iOS-related changes
+on:
+  push:
+    branches: 
+      - main
+      - develop
+    paths:
+      - 'src/ios/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/ios/**'
+
+# Define permissions needed for the workflow
+permissions:
+  contents: read
+  id-token: write
+  checks: write
+
+# Prevent concurrent workflow runs for same ref/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Environment variables used across jobs
+env:
+  XCODE_VERSION: '14.0'
+  RUBY_VERSION: '2.7'
+  DEVELOPER_APP_ID: ${{ secrets.APPLE_DEVELOPER_APP_ID }}
+  DEVELOPER_APP_IDENTIFIER: ${{ secrets.APPLE_DEVELOPER_APP_IDENTIFIER }}
+  DEVELOPER_PORTAL_TEAM_ID: ${{ secrets.APPLE_DEVELOPER_PORTAL_TEAM_ID }}
+  MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+  KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+
+jobs:
+  # Requirement: iOS CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+  build-and-test:
+    name: Build and Test
+    runs-on: macos-latest
+    
+    steps:
+      # Checkout repository code
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # Setup Ruby environment for fastlane
+      - name: Setup Ruby
+        uses: actions/setup-ruby@v1
+        with:
+          ruby-version: ${{ env.RUBY_VERSION }}
+
+      # Install Bundler for dependency management
+      - name: Install Bundler
+        run: gem install bundler
+
+      # Cache Ruby dependencies
+      - name: Cache Ruby Dependencies
+        uses: actions/cache@v3
+        with:
+          path: vendor/bundle
+          key: ${{ runner.os }}-gems-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gems-
+
+      # Install dependencies
+      - name: Install Dependencies
+        run: |
+          cd src/ios
+          bundle config path vendor/bundle
+          bundle install --jobs 4 --retry 3
+          bundle exec pod install
+
+      # Requirement: Security Protocols (9.3 Security Protocols/9.3.1 Access Control Measures)
+      # Setup code signing
+      - name: Setup Code Signing
+        run: |
+          cd src/ios
+          bundle exec fastlane setup_signing
+          security create-keychain -p ${{ env.KEYCHAIN_PASSWORD }} build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ${{ env.KEYCHAIN_PASSWORD }} build.keychain
+          security set-keychain-settings -t 3600 -l ~/Library/Keychains/build.keychain
+
+      # Run SwiftLint code analysis
+      - name: Run SwiftLint
+        run: |
+          cd src/ios
+          bundle exec fastlane run swiftlint \
+            config_file: .swiftlint.yml \
+            strict: true \
+            reporter: junit
+
+      # Build application
+      - name: Build Application
+        run: |
+          cd src/ios
+          bundle exec fastlane build
+
+      # Run unit tests
+      - name: Run Unit Tests
+        run: |
+          cd src/ios
+          bundle exec fastlane test
+
+      # Run UI tests
+      - name: Run UI Tests
+        run: |
+          cd src/ios
+          xcodebuild test \
+            -workspace PantryChef.xcworkspace \
+            -scheme PantryChefUITests \
+            -destination 'platform=iOS Simulator,name=iPhone 14 Pro,OS=latest' \
+            -enableCodeCoverage YES
+
+      # Generate test coverage report
+      - name: Generate Test Coverage
+        run: |
+          cd src/ios
+          bundle exec fastlane run xcov \
+            workspace: "PantryChef.xcworkspace" \
+            scheme: "PantryChef" \
+            output_directory: "fastlane/test_output/coverage" \
+            minimum_coverage_percentage: 80.0
+
+      # Upload test results
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test_results
+          path: src/ios/fastlane/test_output
+          retention-days: 14
+
+      # Upload coverage report
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage_report
+          path: src/ios/fastlane/test_output/coverage
+          retention-days: 14
+
+      # Cleanup keychain
+      - name: Clean Up Keychain
+        if: always()
+        run: |
+          security delete-keychain build.keychain
+
+# Human Tasks:
+# 1. Configure Apple Developer Program membership and certificates
+# 2. Set up App Store Connect API key for automated deployments
+# 3. Configure GitHub repository secrets:
+#    - APPLE_DEVELOPER_APP_ID
+#    - APPLE_DEVELOPER_APP_IDENTIFIER
+#    - APPLE_DEVELOPER_PORTAL_TEAM_ID
+#    - MATCH_PASSWORD
+#    - KEYCHAIN_PASSWORD
+# 4. Set up code signing Git repository with proper access
+# 5. Install required development tools (Xcode, CocoaPods, SwiftLint)
+# 6. Configure notification settings for build status alerts
