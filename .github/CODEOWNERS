@@ -1,0 +1,65 @@
+# Human Tasks:
+# 1. Verify that all team groups (@backend-team, @ios-team, etc.) exist in GitHub organization
+# 2. Ensure all listed team members have appropriate access levels in GitHub
+# 3. Configure branch protection rules to enforce code owner reviews
+# 4. Set up automated notifications for code owners when PRs are created
+
+# Backend Services and API Endpoints
+# Requirement: System Architecture - Backend services and API layer ownership
+src/backend/ @backend-team @devops-team
+
+# iOS Native Application
+# Requirement: System Architecture - Client layer ownership for iOS
+src/ios/ @ios-team @mobile-leads
+
+# Android Native Application
+# Requirement: System Architecture - Client layer ownership for Android
+src/android/ @android-team @mobile-leads
+
+# Web Dashboard Application
+# Requirement: System Architecture - Client layer ownership for web
+src/web/ @web-team @frontend-leads
+
+# Infrastructure Configuration
+# Requirement: Component Architecture - Infrastructure and platform ownership
+infrastructure/ @devops-team @platform-leads
+
+# Machine Learning Service
+# Requirement: Component Architecture - ML service ownership
+src/backend/src/services/image.service.ts @ml-team @backend-team
+
+# Recipe Matching Service
+# Requirement: Component Architecture - Recipe service ownership
+src/backend/src/services/recipe.service.ts @backend-team @recipe-experts
+
+# GitHub Actions and Repository Configuration
+# Requirement: System Architecture - DevOps and platform configuration ownership
+.github/ @devops-team @platform-leads
+
+# Backend Configuration Files
+# Requirement: Security Architecture - Security-critical configuration ownership
+src/backend/src/config/ @backend-team @security-team
+
+# Security Implementation Files
+# Requirement: Security Architecture - Security implementation ownership
+**/security.ts @security-team
+
+# Test Files
+# Requirement: Component Architecture - Quality assurance ownership
+**/test/ @qa-team
+
+# Package Dependencies
+# Requirement: Component Architecture - Platform dependency management
+package.json @platform-leads
+
+# Docker Configuration
+# Requirement: Component Architecture - Container configuration ownership
+docker/ @devops-team
+
+# Kubernetes Configuration
+# Requirement: Component Architecture - Container orchestration ownership
+kubernetes/ @devops-team @platform-leads
+
+# Default owners for unmatched files
+# Requirement: System Architecture - Default oversight for uncategorized components
+* @project-leads
