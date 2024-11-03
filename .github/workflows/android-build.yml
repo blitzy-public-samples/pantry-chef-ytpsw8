@@ -1,0 +1,122 @@
+# Requirement: CI/CD Pipeline - Automated build and test process for Android application
+name: Build and Test Android App
+
+# Requirement: CI/CD Pipeline - Trigger configuration
+on:
+  push:
+    branches: ['main', 'develop']
+  pull_request:
+    branches: ['main', 'develop']
+
+# Requirement: CI/CD Pipeline - Environment configuration
+env:
+  JAVA_VERSION: '11'
+  NODE_VERSION: '16'
+  GRADLE_VERSION: '7.5.1'
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Requirement: CI/CD Pipeline - Repository checkout
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Requirement: Mobile Platform Support - Java environment setup
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'adopt'
+          cache: 'gradle'
+
+      # Requirement: Mobile Platform Support - Node.js setup for React Native
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # Requirement: CI/CD Pipeline - Gradle dependency caching
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # Requirement: CI/CD Pipeline - npm dependency caching
+      - name: Cache npm packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # Requirement: Mobile Platform Support - Install dependencies
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd android && chmod +x gradlew
+
+      # Requirement: Security Update Management - Check for dependency updates
+      - name: Check for dependency updates
+        run: |
+          cd android
+          ./gradlew dependencyUpdates
+
+      # Requirement: Testing Requirements - Run unit tests
+      - name: Run unit tests
+        run: |
+          cd android
+          ./gradlew test --no-daemon
+
+      # Requirement: Testing Requirements - Run instrumentation tests
+      - name: Run instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          script: cd android && ./gradlew connectedAndroidTest --no-daemon
+
+      # Requirement: Mobile Platform Support - Build debug APK
+      - name: Build debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+      # Requirement: CI/CD Pipeline - Upload debug APK
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      # Requirement: Testing Requirements - Upload test results
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: |
+            android/app/build/reports/tests/
+            android/app/build/reports/androidTests/
+
+      # Requirement: Security Update Management - Upload dependency report
+      - name: Upload dependency report
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-updates
+          path: android/build/dependencyUpdates/report.json
+
+      # Requirement: CI/CD Pipeline - Upload build logs
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-logs
+          path: android/app/build/outputs/logs/
