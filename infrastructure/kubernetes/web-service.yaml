@@ -1,0 +1,47 @@
+# Human Tasks:
+# 1. Verify DNS records are configured for the LoadBalancer service
+# 2. Ensure firewall rules allow traffic on port 80
+# 3. Confirm SSL termination is configured at the load balancer level
+# 4. Verify Prometheus metrics endpoints are accessible
+# 5. Review service account permissions for metrics collection
+
+# Kubernetes API Version: v1.24+
+apiVersion: v1
+kind: Service
+metadata:
+  name: pantrychef-web
+  namespace: production
+  labels:
+    app: pantrychef
+    component: web
+    environment: production
+  # Requirement: Container Orchestration - Prometheus metrics configuration
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+    prometheus.io/path: "/metrics"
+
+spec:
+  # Requirement: Load Balancing - LoadBalancer type for external traffic distribution
+  type: LoadBalancer
+  
+  # Requirement: Web Application Access - Port configuration for web dashboard access
+  ports:
+    - port: 80  # External port
+      targetPort: 3000  # Container port
+      protocol: TCP
+      name: http
+  
+  # Requirement: Load Balancing - Selector for web frontend pods
+  selector:
+    app: pantrychef
+    component: web
+  
+  # Requirement: High Availability - Session affinity configuration
+  sessionAffinity: None
+  
+  # Requirement: High Availability - External traffic policy for preserving client source IPs
+  externalTrafficPolicy: Local
+  
+  # Requirement: Load Balancing - Load balancer configurations
+  loadBalancerSourceRanges: []  # Empty array allows traffic from all sources
