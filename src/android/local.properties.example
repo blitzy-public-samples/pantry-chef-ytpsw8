@@ -1,0 +1,45 @@
+# HUMAN TASKS:
+# 1. Copy this file to local.properties and update with your local paths
+# 2. Generate a release keystore using Android Studio or keytool
+# 3. Configure your Google Vision API key from Google Cloud Console
+# 4. Set up Firebase project and obtain push notification key
+# 5. Place TensorFlow Lite model in the specified assets directory
+# 6. Never commit the actual local.properties file to version control
+
+# Requirement: Mobile Platform Support - Android SDK path configuration
+# Path to Android SDK installation directory
+sdk.dir=/Users/username/Library/Android/sdk
+# For Windows: sdk.dir=C:\\Users\\username\\AppData\\Local\\Android\\Sdk
+
+# Requirement: Development Environment - Android NDK configuration
+# Path to Android NDK version 23.1.7779620
+ndk.dir=${sdk.dir}/ndk/23.1.7779620
+
+# Requirement: Development Environment - Flutter SDK path for React Native integration
+flutter.sdk=/Users/username/flutter
+# For Windows: flutter.sdk=C:\\Users\\username\\flutter
+
+# Requirement: Security Protocols - Release keystore configuration
+# Path relative to app directory
+keystore.file=../keystore/release.keystore
+keystore.password=KEYSTORE_PASSWORD
+keystore.key.alias=RELEASE_KEY_ALIAS
+keystore.key.password=KEY_PASSWORD
+
+# Requirement: Security Protocols - API keys and sensitive configuration
+# Google Vision API key for backup image recognition service
+google.vision.api.key=GOOGLE_VISION_API_KEY
+
+# Firebase Cloud Messaging server key for push notifications
+firebase.push.key=FIREBASE_PUSH_KEY
+
+# Requirement: Mobile Platform Support - TensorFlow Lite model path
+# Path relative to app/src/main/assets
+tensorflow.model.path=src/main/assets/model.tflite
+
+# SECURITY NOTES:
+# - This file should never be committed to version control
+# - Contains sensitive API keys and credentials that must be kept secure
+# - Each developer should maintain their own local.properties file
+# - API keys should be rotated regularly according to security protocols
+# - Use environment-specific keys for development, staging, and production
