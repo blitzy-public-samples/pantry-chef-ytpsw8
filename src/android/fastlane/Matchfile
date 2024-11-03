@@ -1,0 +1,54 @@
+# HUMAN TASKS:
+# 1. Create a Google Cloud Storage bucket for storing certificates
+# 2. Configure GCP service account with appropriate permissions
+# 3. Set up encryption keys in CI/CD environment variables
+# 4. Verify keystore access permissions for CI/CD pipeline
+# 5. Configure release signing credentials in environment variables
+
+# Requirement: CI/CD Pipeline - Secure certificate storage configuration
+# Version: fastlane-plugin-match 2.210.1
+# Version: google-cloud-storage 2.8.0
+
+# Requirement: Security Architecture - Git repository for encrypted keystores
+git_url("git@github.com:pantrychef/certificates.git")
+
+# Requirement: Security Architecture - Google Cloud Storage backend
+storage_mode("google_cloud")
+google_cloud_bucket_name("pantrychef-certificates")
+
+# Requirement: CI/CD Pipeline - Certificate type configuration
+type("development") # Can be: development, adhoc, appstore
+
+# Requirement: Deployment Process - Application identifier from build.gradle
+app_identifier("com.pantrychef")
+
+# Requirement: Security Architecture - Keystore configuration for different environments
+keystore({
+  # Development keystore configuration
+  development: {
+    path: "keystores/debug.keystore",
+    password: "android",
+    alias: "androiddebugkey",
+    alias_password: "android"
+  },
+  # Production keystore configuration with environment variables
+  production: {
+    path: "keystores/release.keystore",
+    password: "ENV[RELEASE_KEYSTORE_PASSWORD]",
+    alias: "ENV[RELEASE_KEY_ALIAS]",
+    alias_password: "ENV[RELEASE_KEY_PASSWORD]"
+  }
+})
+
+# Requirement: CI/CD Pipeline - Platform specification
+platform("android")
+
+# Requirement: Security Architecture - Match configuration options
+readonly(false)
+verbose(true)
+force(false)
+skip_confirmation(true)
+skip_docs(false)
+
+# Requirement: CI/CD Pipeline - Team configuration
+team_id("pantrychef-team")
