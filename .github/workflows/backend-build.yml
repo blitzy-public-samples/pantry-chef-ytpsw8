@@ -1,0 +1,164 @@
+# HUMAN TASKS:
+# 1. Configure repository secrets for service credentials:
+#    - MONGODB_URI
+#    - REDIS_URL
+#    - ELASTICSEARCH_URL
+#    - RABBITMQ_URL
+# 2. Set up CodeQL credentials and access tokens
+# 3. Configure artifact retention policies in repository settings
+# 4. Set up required branch protection rules for main and develop
+
+# Requirement: CI/CD Pipeline - Implements continuous integration for backend services
+name: Backend Build
+
+# Requirement: Pipeline Architecture - Configure triggers for main and develop branches
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# Environment variables for test configuration
+env:
+  NODE_ENV: test
+  MONGODB_URI: mongodb://localhost:27017/pantrychef_test
+  REDIS_URL: redis://localhost:6379
+  ELASTICSEARCH_URL: http://localhost:9200
+  RABBITMQ_URL: amqp://localhost:5672
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    # Requirement: Development Environment - Configure service dependencies
+    services:
+      mongodb:
+        image: mongo:5.0
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:6.2
+        ports:
+          - 6379:6379
+      elasticsearch:
+        image: elasticsearch:8.6.0
+        env:
+          discovery.type: single-node
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 9200:9200
+      rabbitmq:
+        image: rabbitmq:3.9
+        ports:
+          - 5672:5672
+
+    steps:
+      # Requirement: CI/CD Pipeline - Checkout repository code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Requirement: Development Environment - Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+          cache: 'npm'
+
+      # Requirement: CI/CD Pipeline - Cache dependencies
+      - name: Cache npm dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
+
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          cd src/backend
+          npm ci
+
+      # Requirement: Development Environment - Run linting
+      - name: Run linting
+        run: |
+          cd src/backend
+          npm run lint
+        
+      # Requirement: Development Environment - Run type checking
+      - name: Run type checking
+        run: |
+          cd src/backend
+          npx tsc --noEmit
+
+      # Requirement: Testing Infrastructure - Run unit tests
+      - name: Run unit tests
+        run: |
+          cd src/backend
+          npm test -- --coverage --testPathPattern=tests/unit
+
+      # Requirement: Testing Infrastructure - Run integration tests
+      - name: Run integration tests
+        run: |
+          cd src/backend
+          npm test -- --coverage --testPathPattern=tests/integration
+
+      # Requirement: Development Environment - Build TypeScript
+      - name: Build TypeScript
+        run: |
+          cd src/backend
+          npm run build
+
+      # Requirement: Security Compliance - Run security scanning
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          languages: javascript
+          queries: security-extended
+          config-file: ./.github/codeql/codeql-config.yml
+
+      # Run npm security audit
+      - name: Run npm audit
+        run: |
+          cd src/backend
+          npm audit --audit-level=high
+
+      # Upload build artifacts
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: backend-dist
+          path: |
+            src/backend/dist
+            src/backend/coverage
+          retention-days: 14
+
+      # Upload test coverage
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-reports
+          path: src/backend/coverage
+          retention-days: 14
+
+      # Requirement: Security Compliance - Check test coverage thresholds
+      - name: Check coverage thresholds
+        run: |
+          cd src/backend
+          npx jest --coverage --coverageThreshold='{"global":{"lines":80,"functions":80,"branches":75,"statements":80}}'
+
+      # Notify on failure
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Backend Build Failure',
+              body: `Build failed in workflow: ${context.workflow}\nRun: ${context.runId}\nSee: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            })
