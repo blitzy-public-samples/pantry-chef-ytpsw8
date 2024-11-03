@@ -1,0 +1,312 @@
+# fastlane version: ^2.210.0
+# cocoapods version: ^1.12.0
+# xcode version: ^14.0
+# swiftlint version: ^0.50.0
+
+# Import app identifier and team ID from Appfile
+import_from_git(
+  url: "src/ios/fastlane/Appfile"
+)
+
+# Import certificate repository URL from Matchfile
+import_from_git(
+  url: "src/ios/fastlane/Matchfile"
+)
+
+# Human Tasks:
+# 1. Configure Apple Developer Program membership and certificates
+# 2. Set up App Store Connect API key for automated deployments
+# 3. Configure environment variables in CI system for sensitive data
+# 4. Set up code signing Git repository with proper access
+# 5. Install required development tools (Xcode, CocoaPods, SwiftLint)
+# 6. Configure notification settings for build status alerts
+
+default_platform(:ios)
+
+platform :ios do
+  # Requirement: iOS Native Application (1.1 System Overview/Core Capabilities)
+  # Setup steps that run before any lane
+  before_all do
+    # Ensure clean git status
+    ensure_git_status_clean
+
+    # Install required dependencies
+    cocoapods(
+      repo_update: true,
+      try_repo_update_on_error: true
+    )
+
+    # Setup code signing with match
+    sync_code_signing(
+      type: "development",
+      readonly: true,
+      force_for_new_devices: true
+    )
+
+    # Verify Xcode version compatibility
+    xcversion(version: "~> 14.0")
+
+    # Configure build environment variables
+    ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "180"
+    ENV["FASTLANE_XCODE_LIST_TIMEOUT"] = "120"
+  end
+
+  # Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+  # Runs all unit and UI tests
+  desc "Run tests"
+  lane :test do
+    # Run SwiftLint code analysis
+    swiftlint(
+      mode: :lint,
+      config_file: ".swiftlint.yml",
+      strict: true,
+      reporter: "junit"
+    )
+
+    # Build for testing using xcodebuild
+    scan(
+      workspace: "PantryChef.xcworkspace",
+      scheme: "PantryChef-Development",
+      clean: true,
+      code_coverage: true,
+      device: "iPhone 14 Pro",
+      result_bundle: true
+    )
+
+    # Generate test coverage report
+    xcov(
+      workspace: "PantryChef.xcworkspace",
+      scheme: "PantryChef-Development",
+      output_directory: "fastlane/test_output/coverage",
+      minimum_coverage_percentage: 80.0
+    )
+
+    # Upload test results to CI system
+    trainer(
+      output_directory: "fastlane/test_output",
+      fail_build: true
+    )
+
+    # Send test notifications to team
+    notification(
+      title: "PantryChef iOS Tests",
+      message: "Test suite completed"
+    )
+  end
+
+  # Requirement: iOS Native Application (1.1 System Overview/Core Capabilities)
+  # Builds the application for development
+  desc "Build development version"
+  lane :build do
+    # Install pod dependencies using cocoapods
+    cocoapods(
+      clean_install: true,
+      podfile: "Podfile"
+    )
+
+    # Setup development code signing with match
+    match(
+      type: "development",
+      readonly: true,
+      force_for_new_devices: true
+    )
+
+    # Build development scheme with xcodebuild
+    gym(
+      workspace: "PantryChef.xcworkspace",
+      scheme: "PantryChef-Development",
+      clean: true,
+      export_method: "development",
+      configuration: "Debug",
+      include_bitcode: false,
+      include_symbols: true
+    )
+
+    # Run post-build validations
+    validate_build
+
+    # Archive build artifacts
+    zip(
+      path: "build/",
+      output_path: "artifacts/build.zip"
+    )
+
+    # Generate build reports
+    xcode_build_report
+  end
+
+  # Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+  # Deploys a beta build to TestFlight
+  desc "Deploy beta to TestFlight"
+  lane :beta do
+    # Increment build number
+    increment_build_number(
+      build_number: latest_testflight_build_number + 1
+    )
+
+    # Install pod dependencies using cocoapods
+    cocoapods(
+      clean_install: true,
+      podfile: "Podfile"
+    )
+
+    # Setup app store code signing with match
+    match(
+      type: "appstore",
+      readonly: true
+    )
+
+    # Build app store scheme with xcodebuild
+    gym(
+      workspace: "PantryChef.xcworkspace",
+      scheme: "PantryChef-Staging",
+      clean: true,
+      export_method: "app-store",
+      configuration: "Release",
+      include_bitcode: true,
+      include_symbols: true
+    )
+
+    # Run app store validation checks
+    precheck(
+      default_rule_level: :error
+    )
+
+    # Upload to TestFlight using pilot
+    pilot(
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+      notify_external_testers: false,
+      changelog: "Beta build for testing"
+    )
+
+    # Notify beta testers via email
+    notification(
+      title: "New Beta Available",
+      message: "Version #{get_version_number} (#{get_build_number}) is ready for testing"
+    )
+
+    # Update beta deployment documentation
+    update_beta_docs
+  end
+
+  # Requirement: iOS Platform Support (1.2 Scope/System Boundaries)
+  # Deploys a production build to App Store
+  desc "Deploy to App Store"
+  lane :release do
+    # Verify release readiness checklist
+    ensure_release_ready
+
+    # Increment version number
+    increment_version_number(
+      bump_type: "patch"
+    )
+
+    # Install pod dependencies using cocoapods
+    cocoapods(
+      clean_install: true,
+      podfile: "Podfile"
+    )
+
+    # Setup app store code signing with match
+    match(
+      type: "appstore",
+      readonly: true
+    )
+
+    # Build production scheme with xcodebuild
+    gym(
+      workspace: "PantryChef.xcworkspace",
+      scheme: "PantryChef-Production",
+      clean: true,
+      export_method: "app-store",
+      configuration: "Release",
+      include_bitcode: true,
+      include_symbols: true
+    )
+
+    # Run app store compliance checks
+    precheck(
+      default_rule_level: :error,
+      include_in_app_purchases: true
+    )
+
+    # Upload to App Store using deliver
+    deliver(
+      submit_for_review: true,
+      automatic_release: false,
+      force: true,
+      skip_metadata: false,
+      skip_screenshots: false,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: false,
+        content_rights_contains_third_party_content: false
+      }
+    )
+
+    # Tag release in git
+    add_git_tag(
+      tag: "v#{get_version_number}-#{get_build_number}"
+    )
+
+    # Generate release notes
+    generate_release_notes
+
+    # Update deployment documentation
+    update_release_docs
+  end
+
+  # Error handling for all lanes
+  error do |lane, exception|
+    # Send error notification
+    notification(
+      title: "iOS Build Error",
+      message: "Lane #{lane} failed: #{exception.message}"
+    )
+
+    # Log error details
+    puts "Error in lane #{lane}: #{exception.message}"
+    puts exception.backtrace.join("\n")
+  end
+end
+
+# Helper methods for build process
+def validate_build
+  # Validate build artifacts
+  Dir.glob("build/*.ipa") do |ipa|
+    puts "Validating IPA: #{ipa}"
+    sh("xcrun altool --validate-app -f #{ipa} -t ios")
+  end
+end
+
+def ensure_release_ready
+  # Check release prerequisites
+  ensure_git_branch(branch: 'main')
+  ensure_git_status_clean
+  ensure_no_debug_code(text: "debugPrint")
+  ensure_no_debug_code(text: "print")
+end
+
+def update_beta_docs
+  # Update beta deployment documentation
+  sh("echo 'Beta deployment completed: #{Time.now}' >> beta_deployments.log")
+end
+
+def update_release_docs
+  # Update release documentation
+  sh("echo 'App Store deployment completed: #{Time.now}' >> release_deployments.log")
+end
+
+def generate_release_notes
+  # Generate release notes from git commits
+  sh("git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:'%s' > release_notes.txt")
+end
+
+def xcode_build_report
+  # Generate Xcode build report
+  xcode_build_time_summary(
+    workspace: "PantryChef.xcworkspace",
+    scheme: "PantryChef-Development"
+  )
+end
