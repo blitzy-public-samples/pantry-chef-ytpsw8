@@ -1,0 +1,99 @@
+# HUMAN TASKS:
+# 1. Configure Google Play Console API credentials in repository secrets (GOOGLE_PLAY_JSON_KEY)
+# 2. Set up Android release keystore and add to repository secrets (KEYSTORE_FILE, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)
+# 3. Verify Fastlane configuration in android/fastlane/
+# 4. Configure required environment variables in repository settings
+# 5. Set up branch protection rules for main branch and version tags
+
+# Requirement: CI/CD Pipeline Architecture - GitHub Actions workflow for Android app releases
+name: Android Release
+
+# Requirement: CI/CD Pipeline Architecture - Workflow triggers
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags
+    branches:
+      - main  # Trigger on main branch pushes
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment target'
+        type: choice
+        options:
+          - beta
+          - production
+        required: true
+
+# Requirement: Security Protocols - Environment configuration
+env:
+  JAVA_VERSION: '11'
+  RUBY_VERSION: '3.0'
+
+# Requirement: CI/CD Pipeline Architecture - Jobs configuration
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    # Requirement: Security Protocols - Environment-specific configuration
+    environment: ${{ github.event.inputs.environment || 'production' }}
+    
+    steps:
+      # Requirement: CI/CD Pipeline Architecture - Repository checkout
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Required for proper versioning
+      
+      # Requirement: CI/CD Pipeline Architecture - Java setup
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+      
+      # Requirement: CI/CD Pipeline Architecture - Ruby setup for Fastlane
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ env.RUBY_VERSION }}
+          bundler-cache: true
+      
+      # Requirement: CI/CD Pipeline Architecture - Gradle cache
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*') }}
+      
+      # Requirement: Security Protocols - Keystore setup
+      - name: Decode Keystore
+        run: |
+          echo ${{ secrets.KEYSTORE_FILE }} | base64 -d > android/app/release.keystore
+      
+      # Requirement: CI/CD Pipeline Architecture - Dependencies installation
+      - name: Install Dependencies
+        run: |
+          cd android
+          bundle install
+      
+      # Requirement: CI/CD Pipeline Architecture - Test execution
+      - name: Run Tests
+        run: |
+          cd android
+          ./gradlew test
+      
+      # Requirement: Deployment Process - Play Store deployment
+      - name: Deploy to Play Store
+        run: |
+          cd android
+          bundle exec fastlane ${{ github.event.inputs.environment || 'production' }}
+        env:
+          # Requirement: Security Protocols - Secure credential handling
+          GOOGLE_PLAY_JSON_KEY: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
