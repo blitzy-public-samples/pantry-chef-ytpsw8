@@ -1,0 +1,120 @@
+// HUMAN TASKS:
+// 1. Ensure Android Studio and JDK 11+ are installed
+// 2. Configure Android SDK path in local.properties
+// 3. Run ./gradlew clean before first build
+// 4. Verify Gradle version compatibility with React Native
+// 5. Configure security update repositories in Maven settings
+
+// Root-level build configuration for PantryChef Android application
+// Requirement: Mobile Platform Support - Native Android build configuration
+
+buildscript {
+    // Requirement: Development Environment - Build tool versions
+    ext {
+        buildToolsVersion = "33.0.0"
+        minSdkVersion = 21
+        compileSdkVersion = 33
+        targetSdkVersion = 33
+        kotlinVersion = '1.7.10'
+        nodeModulesPath = '../node_modules'
+        ndkVersion = "23.1.7779620"
+    }
+
+    // Requirement: Development Environment - Repository configuration
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://www.jitpack.io' }
+        maven { url 'https://maven.google.com' }
+    }
+
+    // Requirement: Development Environment - Build script dependencies
+    dependencies {
+        // Android Gradle Plugin v7.3.1
+        classpath 'com.android.tools.build:gradle:7.3.1'
+        
+        // Kotlin Gradle Plugin v1.7.10
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.7.10"
+        
+        // React Native Gradle Plugin v0.71.0
+        classpath "com.facebook.react:react-native-gradle-plugin:0.71.0"
+        
+        // Requirement: Security Protocols - Dependency verification
+        classpath 'com.google.android.gms:strict-version-matcher-plugin:1.2.4'
+    }
+}
+
+// Requirement: Development Environment - Project-wide configuration
+allprojects {
+    repositories {
+        // Primary repositories
+        google()
+        mavenCentral()
+        
+        // Additional repositories for third-party dependencies
+        maven { url 'https://www.jitpack.io' }
+        maven { url 'https://maven.google.com' }
+        
+        // React Native specific repository
+        maven {
+            // Android JSC (JavaScript Core) local repository
+            url("$rootDir/../node_modules/jsc-android/dist")
+        }
+    }
+
+    // Requirement: Security Protocols - Dependency verification
+    configurations.all {
+        resolutionStrategy {
+            // Force latest versions of critical security dependencies
+            force 'com.google.guava:guava:31.1-android'
+            force 'org.bouncycastle:bcprov-jdk15on:1.70'
+            
+            // Cache dependencies for faster builds
+            cacheChangingModulesFor 0, 'seconds'
+            
+            // Fail fast on version conflicts
+            failOnVersionConflict()
+        }
+    }
+}
+
+// Requirement: Security Protocols - Task for dependency updates check
+task dependencyUpdates(type: DependencyUpdatesTask) {
+    checkForGradleUpdate = true
+    outputFormatter = "json"
+    outputDir = "build/dependencyUpdates"
+    reportfileName = "report"
+}
+
+// Clean build directory
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+// Requirement: Development Environment - Gradle configuration
+wrapper {
+    gradleVersion = '7.5.1'
+    distributionType = Wrapper.DistributionType.ALL
+}
+
+// Requirement: Security Protocols - Security update configuration
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            android {
+                // Enable security features for all subprojects
+                defaultConfig {
+                    vectorDrawables.useSupportLibrary = true
+                }
+                
+                // Enable R8 optimization for release builds
+                buildTypes {
+                    release {
+                        minifyEnabled true
+                        proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+                    }
+                }
+            }
+        }
+    }
+}
