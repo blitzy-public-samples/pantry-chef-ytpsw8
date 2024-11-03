@@ -1,0 +1,196 @@
+/* HUMAN TASKS:
+1. Ensure Tailwind CSS v3.3.0 is installed
+2. Install @tailwindcss/forms v0.5.0 plugin
+3. Install @tailwindcss/typography v0.5.0 plugin
+4. Verify Inter font is properly imported in the project
+5. Configure dark mode in tailwind.config.js */
+
+/* Tailwind CSS directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global CSS variables - Requirement: Web Dashboard UI with responsive design */
+:root {
+  --navbar-height: 64px;
+  --sidebar-width: 250px;
+  --content-max-width: 1280px;
+  --transition-duration: 200ms;
+  --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Base styles - Requirement: Frontend UI Framework with Material Design */
+@layer base {
+  html {
+    font-family: Inter, system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-background text-text-primary antialiased dark:bg-background-dark dark:text-white;
+  }
+
+  ::selection {
+    @apply bg-primary-200 text-primary-900;
+  }
+}
+
+/* Custom utility classes - Requirement: Mobile-first Design */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.page-container {
+  @apply container mx-auto px-4 sm:px-6 lg:px-8 max-w-[var(--content-max-width)];
+}
+
+.card {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 transition-all duration-[var(--transition-duration)];
+}
+
+/* Media queries - Requirement: Mobile-first Design */
+@media (prefers-color-scheme: dark) {
+  body {
+    @apply bg-background-dark text-white;
+  }
+
+  .card {
+    @apply bg-gray-800 text-white;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    @apply px-4;
+  }
+
+  .card {
+    @apply p-4;
+  }
+}
+
+/* Animations - Requirement: Web Dashboard UI with responsive design */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Animation utility classes */
+.animate-fade-in {
+  animation: fadeIn var(--transition-duration) var(--transition-timing);
+}
+
+.animate-slide-in {
+  animation: slideIn var(--transition-duration) var(--transition-timing);
+}
+
+/* Material Design elevation classes - Requirement: Frontend UI Framework */
+.elevation-1 {
+  @apply shadow-sm;
+}
+
+.elevation-2 {
+  @apply shadow-md;
+}
+
+.elevation-3 {
+  @apply shadow-lg;
+}
+
+.elevation-4 {
+  @apply shadow-xl;
+}
+
+/* Responsive layout utilities - Requirement: Mobile-first Design */
+.layout-with-sidebar {
+  @apply ml-0 lg:ml-[var(--sidebar-width)] transition-all duration-[var(--transition-duration)];
+}
+
+.layout-with-navbar {
+  @apply mt-[var(--navbar-height)];
+}
+
+/* Form styles - Using @tailwindcss/forms plugin */
+@layer components {
+  .form-input {
+    @apply rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700;
+  }
+
+  .form-select {
+    @apply rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700;
+  }
+
+  .form-checkbox {
+    @apply rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500 dark:border-gray-600;
+  }
+
+  .form-radio {
+    @apply border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500 dark:border-gray-600;
+  }
+}
+
+/* Typography styles - Using @tailwindcss/typography plugin */
+.prose {
+  @apply max-w-none dark:prose-invert prose-headings:text-text-primary prose-p:text-text-secondary;
+}
+
+/* Loading states */
+.loading-shimmer {
+  @apply animate-pulse bg-gray-200 dark:bg-gray-700;
+}
+
+/* Focus styles for accessibility */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800;
+}
+
+/* Toast notification positioning */
+.toast-container {
+  @apply fixed bottom-4 right-4 z-50;
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+  @apply fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm transition-opacity;
+}
+
+/* Responsive grid layouts */
+.grid-auto-fit {
+  @apply grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+}
+
+/* Status indicators */
+.status-dot {
+  @apply h-2 w-2 rounded-full;
+}
+
+.status-dot-success {
+  @apply bg-success-main;
+}
+
+.status-dot-warning {
+  @apply bg-warning-main;
+}
+
+.status-dot-error {
+  @apply bg-error-main;
+}
