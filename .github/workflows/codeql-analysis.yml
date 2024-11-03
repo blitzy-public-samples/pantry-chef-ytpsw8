@@ -1,0 +1,113 @@
+# HUMAN TASKS:
+# 1. Configure repository secrets for CodeQL access tokens if required
+# 2. Review and adjust security query suites based on project needs
+# 3. Configure branch protection rules to enforce CodeQL checks
+# 4. Set up security alerts routing and notification preferences
+# 5. Configure SARIF upload destinations if external tools are used
+
+# Requirement: Security Compliance - Implements SAST through CodeQL analysis
+name: CodeQL Analysis
+
+# Requirement: CI/CD Pipeline Security - Integration with backend and web build workflows
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  # Requirement: Security Update Management - Automated weekly security scanning
+  schedule:
+    - cron: '0 0 * * 0'
+
+# Requirement: Security Compliance - Define required permissions
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript, typescript]
+
+    steps:
+      # Requirement: CI/CD Pipeline Security - Checkout repository code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Requirement: Security Compliance - Initialize CodeQL analysis
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: ${{ matrix.language }}
+          # Requirement: Security Compliance - Configure extended security queries
+          queries: security-extended,security-and-quality
+          # Configure RAM allocation for analysis
+          ram: 6144
+          # Configure analysis timeout
+          timeout-minutes: 360
+          # Configure paths to analyze
+          paths: |
+            src/backend/**/*.ts
+            src/web/**/*.ts
+            src/web/**/*.tsx
+          # Configure paths to ignore
+          paths-ignore: |
+            **/node_modules/**
+            **/dist/**
+            **/build/**
+            **/*.test.ts
+            **/*.spec.ts
+
+      # Requirement: CI/CD Pipeline Security - Autobuild TypeScript projects
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      # Requirement: Security Compliance - Run CodeQL analysis
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          # Requirement: Security Update Management - Set high severity threshold
+          category: "/language:${{ matrix.language }}"
+          upload: true
+          output: sarif-results
+          threads: auto
+          ram: 6144
+          timeout-minutes: 360
+
+      # Requirement: Security Update Management - Upload analysis results
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: sarif-results
+          category: "/language:${{ matrix.language }}"
+          wait-for-processing: true
+
+      # Requirement: Security Update Management - Handle analysis failures
+      - name: Check for analysis failures
+        if: failure()
+        run: |
+          echo "::error::CodeQL Analysis failed. Please review the security findings."
+          exit 1
+
+      # Requirement: CI/CD Pipeline Security - Coordinate with build workflows
+      - name: Wait for dependent builds
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const builds = ['backend-build.yml', 'web-build.yml']
+            for (const workflow of builds) {
+              await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: workflow,
+                branch: context.ref.replace('refs/heads/', ''),
+                status: 'completed',
+                per_page: 1
+              })
+            }
