@@ -1,0 +1,101 @@
+# Requirement: CI/CD Pipeline - Automated build, test, and security validation pipeline for web application
+name: Web Build
+
+# Requirement: Web Dashboard - Build and validation process for React-based web dashboard component
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'src/web/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'src/web/**'
+
+# Requirement: Frontend Stack - Validation of frontend technology stack
+jobs:
+  build:
+    name: Build and test web application
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/web
+
+    steps:
+      # Requirement: CI/CD Pipeline - Source code checkout
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Requirement: Frontend Stack - Node.js setup with caching
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+          cache: 'npm'
+          cache-dependency-path: src/web/package-lock.json
+
+      # Requirement: CI/CD Pipeline - Dependency caching for faster builds
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: src/web/node_modules
+          key: npm-deps-${{ hashFiles('src/web/package-lock.json') }}
+          restore-keys: |
+            npm-deps-
+
+      # Requirement: CI/CD Pipeline - Clean installation of dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # Requirement: Security Protocols - Type checking validation
+      - name: Type check
+        run: npm run type-check
+
+      # Requirement: Security Protocols - Code quality and security linting
+      - name: Lint check
+        run: npm run lint
+        env:
+          NODE_ENV: production
+
+      # Requirement: Security Protocols - Comprehensive testing
+      - name: Run tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          CI: true
+
+      # Requirement: Web Dashboard - Production build process
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+
+  # Requirement: Security Protocols - Docker image creation with security hardening
+  docker:
+    name: Build Docker image
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    defaults:
+      run:
+        working-directory: src/web
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Requirement: CI/CD Pipeline - Docker build setup
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Requirement: Security Protocols - Secure Docker image build
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg NODE_ENV=production \
+            --build-arg NEXT_TELEMETRY_DISABLED=1 \
+            -f docker/Dockerfile \
+            -t pantrychef-web:${{ github.sha }} \
+            --no-cache \
+            .
