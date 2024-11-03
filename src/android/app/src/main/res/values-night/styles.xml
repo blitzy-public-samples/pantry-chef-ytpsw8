@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+Human Tasks:
+1. Verify Material Design library (com.google.android.material:material:1.5.0) is included in app/build.gradle
+2. Test dark theme appearance across different Android versions (API 21+)
+3. Validate theme transitions between light/dark modes
+4. Test accessibility contrast ratios in dark mode
+5. Verify proper elevation shadows in dark theme
+-->
+
+<!-- Material Design library version: 1.5.0 -->
+<resources>
+    <!-- Requirement: UI Framework Integration - Material Design dark theme implementation -->
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary brand colors -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+
+        <!-- Requirement: Theme Support - Dark theme system UI integration -->
+        <item name="android:windowBackground">@color/colorBackground</item>
+        <item name="android:statusBarColor">@color/statusBarColor</item>
+        <item name="android:navigationBarColor">@color/navigationBarColor</item>
+        <item name="colorSurface">@color/colorSurface</item>
+
+        <!-- Requirement: Mobile Application Layout - Text colors for dark mode -->
+        <item name="android:textColorPrimary">@color/textColorPrimary</item>
+        <item name="android:textColorSecondary">@color/textColorSecondary</item>
+
+        <!-- System UI appearance flags -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <!-- Splash screen theme extending base dark theme -->
+    <style name="AppTheme.Launcher" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/splash_screen</item>
+    </style>
+
+    <!-- Dark action bar overlay theme -->
+    <style name="AppTheme.AppBarOverlay" parent="ThemeOverlay.MaterialComponents.Dark.ActionBar">
+        <!-- Uses default Material Dark ActionBar styling -->
+    </style>
+
+    <!-- Dark popup/menu overlay theme -->
+    <style name="AppTheme.PopupOverlay" parent="ThemeOverlay.MaterialComponents.Dark">
+        <!-- Uses default Material Dark Popup styling -->
+    </style>
+
+    <!-- Custom button style for consistent dark theme appearance -->
+    <style name="CustomButton" parent="Widget.MaterialComponents.Button">
+        <item name="android:minHeight">56dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/textColorPrimary</item>
+        <item name="rippleColor">@color/rippleColor</item>
+    </style>
+
+    <!-- Custom text field style optimized for dark theme -->
+    <style name="CustomTextField" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="android:textSize">16sp</item>
+        <item name="android:padding">16dp</item>
+        <item name="android:textColor">@color/textColorPrimary</item>
+        <item name="android:textColorHint">@color/textColorSecondary</item>
+        <item name="boxStrokeColor">@color/colorAccent</item>
+    </style>
+</resources>
