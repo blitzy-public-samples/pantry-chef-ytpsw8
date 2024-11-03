@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- HUMAN TASKS:
+    1. Ensure proper code signing and provisioning profiles are configured in Xcode
+    2. Verify push notification certificates are generated in Apple Developer Portal
+    3. Configure associated domains if deep linking is required
+    4. Update app icon assets in Xcode
+    -->
+
+    <!-- Core Application Configuration -->
+    <!-- Requirement: iOS Platform Support - Native iOS application (iOS 13+) support configuration -->
+    <key>CFBundleDisplayName</key>
+    <string>PantryChef</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.pantrychef.app</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+
+    <!-- UI Configuration -->
+    <!-- Requirement: Mobile First Design - Portrait orientation priority for mobile-first design -->
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+        <string>armv7</string>
+    </array>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    </array>
+    <key>UIUserInterfaceStyle</key>
+    <string>Light</string>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <true/>
+
+    <!-- Scene Configuration -->
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>Default Configuration</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
+
+    <!-- Privacy Permissions -->
+    <!-- Requirement: Camera Access - Camera permission configuration for photographic ingredient recognition -->
+    <key>NSCameraUsageDescription</key>
+    <string>PantryChef needs camera access to recognize ingredients through photos</string>
+
+    <!-- Requirement: Image Recognition - Photo library access for ingredient recognition from saved images -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>PantryChef needs photo library access to import ingredient images</string>
+
+    <!-- Location Services -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>PantryChef uses your location to find nearby grocery stores</string>
+
+    <!-- Background Modes -->
+    <!-- Requirement: Push Notifications - Push notification capability configuration -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>remote-notification</string>
+    </array>
+</dict>
+</plist>
