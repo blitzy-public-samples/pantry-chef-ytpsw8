@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Human Tasks:
+1. Review logo colors for brand consistency
+2. Validate logo dimensions match design system specifications
+3. Ensure logo meets accessibility contrast requirements
+4. Test logo rendering across different browser/device combinations -->
+
+<svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 240 60" 
+    width="100%" 
+    height="100%" 
+    role="img"
+    aria-label="PantryChef Logo"
+    preserveAspectRatio="xMidYMid meet"
+>
+    <!-- Requirement: Mobile-First Design - Responsive scaling through viewBox and preserveAspectRatio -->
+    
+    <!-- Chef Hat Group -->
+    <g id="chef-hat">
+        <!-- Base of hat -->
+        <path 
+            d="M60 35c0-8.284-6.716-15-15-15-2.55 0-4.95.637-7.05 1.763C36.637 13.95 30.284 8 22 8c-8.284 0-15 6.716-15 15 0 .442.019.879.057 1.308C2.716 25.637 0 29.084 0 33c0 4.418 3.582 8 8 8h44c4.418 0 8-3.582 8-8z"
+            fill="#FFFFFF"
+            stroke="#2C3E50"
+            stroke-width="2"
+        />
+    </g>
+
+    <!-- Plate/Bowl Group -->
+    <g id="plate">
+        <ellipse 
+            cx="35" 
+            cy="45" 
+            rx="25" 
+            ry="8"
+            fill="#FFFFFF"
+            stroke="#2C3E50"
+            stroke-width="2"
+        />
+    </g>
+
+    <!-- Text Group - PantryChef -->
+    <g id="text" transform="translate(75, 40)">
+        <!-- Requirement: Web Dashboard Interface - Primary branding text -->
+        <text 
+            font-family="Arial, sans-serif" 
+            font-size="24" 
+            font-weight="bold" 
+            fill="#2C3E50"
+        >
+            PantryChef
+        </text>
+    </g>
+
+    <!-- Steam Effect -->
+    <g id="steam" opacity="0.6">
+        <path 
+            d="M25 12c0 0 2-3 0-6M35 10c0 0 2-4 0-7M45 11c0 0 2-3 0-6"
+            fill="none"
+            stroke="#95A5A6"
+            stroke-width="2"
+            stroke-linecap="round"
+        />
+    </g>
+
+    <!-- Utensils -->
+    <g id="utensils">
+        <path 
+            d="M55 25l5-10M45 25l-5-10"
+            stroke="#2C3E50"
+            stroke-width="2"
+            stroke-linecap="round"
+        />
+    </g>
+
+    <!-- Metadata for optimization -->
+    <metadata>
+        <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+                 xmlns:schema="http://schema.org/">
+            <rdf:Description rdf:about="">
+                <schema:name>PantryChef Logo</schema:name>
+                <schema:author>PantryChef</schema:author>
+                <schema:dateModified>2024</schema:dateModified>
+                <schema:license>All rights reserved</schema:license>
+            </rdf:Description>
+        </rdf:RDF>
+    </metadata>
+
+    <!-- Optimization attributes for high DPI -->
+    <defs>
+        <style type="text/css">
+            @media screen and (-webkit-min-device-pixel-ratio: 2),
+                   screen and (min-resolution: 192dpi) {
+                svg { shape-rendering: geometricPrecision; }
+            }
+        </style>
+    </defs>
+</svg>
