@@ -1,0 +1,126 @@
+# Human Tasks:
+# 1. Verify storage class 'ebs-gp3' exists in your AWS EKS cluster
+# 2. Configure network policies for MongoDB pod communication
+# 3. Set up monitoring for MongoDB metrics using Prometheus
+# 4. Configure automated backup schedule with AWS Backup
+# 5. Review and adjust resource limits based on workload
+# 6. Set up alerts for replica set health status
+
+# Requirement: High Availability Database Architecture (5.2.2)
+# MongoDB StatefulSet for PantryChef application with multi-AZ deployment
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  namespace: production
+  labels:
+    app: pantrychef
+    component: database
+    environment: production
+spec:
+  serviceName: mongodb-headless
+  # Requirement: High Availability - Deploy 3 replicas for fault tolerance
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pantrychef
+      component: database
+  template:
+    metadata:
+      labels:
+        app: pantrychef
+        component: database
+    spec:
+      # Requirement: High Availability - Pod anti-affinity for multi-AZ deployment
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: pantrychef
+                component: database
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: mongodb
+        # Requirement: Data Storage Configuration (7.3)
+        image: mongo:6.0
+        ports:
+        - containerPort: 27017
+          name: mongodb
+        # Requirement: Data Storage Configuration - Resource allocation
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        volumeMounts:
+        - name: mongodb-data
+          mountPath: /data/db
+        - name: mongodb-config
+          mountPath: /config
+        env:
+        # Requirement: Database Security (9.2.1) - Secure authentication
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGODB_ROOT_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGODB_ROOT_PASSWORD
+        # Requirement: Database Security - Enable encryption and TLS
+        - name: MONGODB_ENCRYPTION_KEY_FILE
+          value: /config/encryption-key
+        - name: MONGODB_TLS_MODE
+          value: "requireTLS"
+        - name: MONGODB_TLS_CERT_KEY_FILE
+          value: "/config/tls/tls.pem"
+        - name: MONGODB_TLS_CA_FILE
+          value: "/config/tls/ca.pem"
+        # Requirement: Database Security - Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          readOnlyRootFilesystem: true
+        # Requirement: High Availability - Health checks
+        livenessProbe:
+          exec:
+            command:
+            - mongo
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - mongo
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: mongodb-config
+        configMap:
+          name: app-config
+  # Requirement: Data Storage Configuration - Persistent storage
+  volumeClaimTemplates:
+  - metadata:
+      name: mongodb-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: ebs-gp3
+      resources:
+        requests:
+          storage: 100Gi
+  # Requirement: High Availability - Update strategy
+  updateStrategy:
+    type: RollingUpdate
