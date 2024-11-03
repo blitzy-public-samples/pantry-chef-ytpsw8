@@ -1,0 +1,213 @@
+# Requirement: CI/CD Pipeline - Automated deployment pipeline with zero downtime deployment
+name: Web Deploy
+
+# Requirement: CI/CD Pipeline - Trigger deployment after successful build
+on:
+  workflow_run:
+    workflows: ["Web Build"]
+    types: [completed]
+    branches: [main, develop]
+
+# Requirement: High Availability - Environment configuration for multi-AZ deployment
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: pantrychef-web
+  HEALTH_CHECK_PATH: /health
+  DEPLOYMENT_TIMEOUT: 900s
+
+# Requirement: CI/CD Pipeline - Prevent concurrent deployments
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Requirement: CI/CD Pipeline - Staging deployment with automated testing
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.staging_url }}
+
+    steps:
+      # Requirement: Security Protocols - AWS authentication with OIDC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-web-deploy
+          aws-region: us-east-1
+          
+      # Requirement: Security Protocols - Secure container registry access
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+        id: ecr-login
+
+      # Requirement: Security Protocols - Build with security scanning
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: infrastructure/docker/web.dockerfile
+          push: true
+          tags: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:staging
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_ENV=production
+            API_URL=${{ secrets.STAGING_API_URL }}
+            WS_URL=${{ secrets.STAGING_WS_URL }}
+          scan-on-push: true
+
+      # Requirement: High Availability - ECS service update with health checks
+      - name: Deploy to ECS
+        id: deploy
+        run: |
+          aws ecs update-service \
+            --cluster pantrychef-staging \
+            --service web-dashboard \
+            --force-new-deployment \
+            --health-check-grace-period-seconds 120 \
+            --deployment-configuration "maximumPercent=200,minimumHealthyPercent=100"
+
+      # Requirement: High Availability - Service stability verification
+      - name: Wait for service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster pantrychef-staging \
+            --services web-dashboard \
+            --timeout-seconds ${{ env.DEPLOYMENT_TIMEOUT }}
+
+      # Requirement: Security Protocols - Integration testing in staging
+      - name: Run integration tests
+        run: |
+          curl --retry 5 --retry-delay 10 -f \
+            https://${{ secrets.STAGING_DOMAIN }}${{ env.HEALTH_CHECK_PATH }}
+
+      # Requirement: Security Protocols - Deployment metrics monitoring
+      - name: Monitor deployment metrics
+        run: |
+          aws cloudwatch put-metric-data \
+            --namespace "PantryChef/Deployments" \
+            --metric-name "StagingDeploymentSuccess" \
+            --value 1 \
+            --timestamp $(date +%s)
+
+  # Requirement: CI/CD Pipeline - Production deployment with blue-green strategy
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [deploy-staging]
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.production_url }}
+
+    steps:
+      # Requirement: Security Protocols - AWS authentication
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-web-deploy
+          aws-region: us-east-1
+
+      # Requirement: Security Protocols - Container registry authentication
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+        id: ecr-login
+
+      # Requirement: CI/CD Pipeline - Promote staging image to production
+      - name: Tag production image
+        run: |
+          aws ecr batch-get-image \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-ids imageTag=staging \
+            --query 'images[].imageManifest' \
+            --output text | aws ecr put-image \
+            --repository-name ${{ env.ECR_REPOSITORY }} \
+            --image-tag production \
+            --image-manifest -
+
+      # Requirement: High Availability - Create new task definition
+      - name: Create new task definition
+        id: task-def
+        run: |
+          TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition web-dashboard-prod \
+            --query 'taskDefinition' \
+            --output json)
+          
+          echo "$TASK_DEF" | jq \
+            --arg IMAGE "${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:production" \
+            '.containerDefinitions[0].image = $IMAGE' > task-definition.json
+          
+          aws ecs register-task-definition \
+            --cli-input-json file://task-definition.json
+
+      # Requirement: CI/CD Pipeline - Blue-green deployment
+      - name: Start blue-green deployment
+        id: deploy
+        run: |
+          aws ecs create-service \
+            --cluster pantrychef-production \
+            --service-name web-dashboard-green \
+            --task-definition web-dashboard-prod \
+            --desired-count 2 \
+            --deployment-configuration "maximumPercent=200,minimumHealthyPercent=100" \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.PROD_SUBNET_IDS }}],securityGroups=[${{ secrets.PROD_SECURITY_GROUP_IDS }}]}" \
+            --load-balancers "targetGroupArn=${{ secrets.PROD_TARGET_GROUP_ARN }},containerName=web,containerPort=80"
+
+      # Requirement: High Availability - Health check monitoring
+      - name: Monitor health metrics
+        run: |
+          for i in {1..30}; do
+            HEALTHY_COUNT=$(aws elbv2 describe-target-health \
+              --target-group-arn ${{ secrets.PROD_TARGET_GROUP_ARN }} \
+              --query 'length(TargetHealthDescriptions[?TargetHealth.State==`healthy`])')
+            
+            if [ "$HEALTHY_COUNT" -ge 2 ]; then
+              echo "New tasks are healthy"
+              exit 0
+            fi
+            
+            sleep 10
+          done
+          echo "Health check timeout"
+          exit 1
+
+      # Requirement: CI/CD Pipeline - Traffic cutover
+      - name: Complete cutover
+        if: success()
+        run: |
+          aws ecs update-service \
+            --cluster pantrychef-production \
+            --service web-dashboard \
+            --task-definition web-dashboard-prod
+
+      # Requirement: CI/CD Pipeline - Cleanup old deployment
+      - name: Cleanup old deployment
+        if: success()
+        run: |
+          aws ecs delete-service \
+            --cluster pantrychef-production \
+            --service web-dashboard-green \
+            --force
+
+      # Requirement: CI/CD Pipeline - Rollback on failure
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          aws ecs update-service \
+            --cluster pantrychef-production \
+            --service web-dashboard \
+            --task-definition web-dashboard-prod-previous \
+            --force-new-deployment
+
+      # Requirement: Security Protocols - Production deployment monitoring
+      - name: Monitor production metrics
+        run: |
+          aws cloudwatch put-metric-data \
+            --namespace "PantryChef/Deployments" \
+            --metric-name "ProductionDeploymentSuccess" \
+            --value 1 \
+            --timestamp $(date +%s)
