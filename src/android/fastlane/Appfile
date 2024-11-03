@@ -1,0 +1,21 @@
+# Fastlane Android configuration file
+# Version: 2.210.1
+
+# HUMAN TASKS:
+# 1. Ensure google-play-api-key.json is placed in the correct path for production deployments
+# 2. Verify Firebase service account credentials are configured correctly
+# 3. Configure internal testing track access in Google Play Console
+# 4. Set up distribution groups in Firebase App Distribution
+
+# Requirement: Android CI/CD Pipeline - Package name configuration
+# This matches the applicationId in build.gradle
+package_name("com.pantrychef")
+
+# Requirement: Security Architecture - Google Play Console API credentials
+# Path to the Google Play Console API key file for automated deployments
+json_key_file("path/to/google-play-api-key.json")
+
+# Note: The following values are automatically used by fastlane for deployments:
+# - Firebase App ID: 1:123456789:android:abcdef
+# - Firebase Distribution Groups: qa-testers, beta-testers
+# - Service Account Credentials: path/to/firebase-service-account.json
