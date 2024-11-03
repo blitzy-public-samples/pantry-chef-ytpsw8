@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+Human Tasks:
+1. Ensure the Material Design library (com.google.android.material:material:1.5.0) is included in the app/build.gradle file
+2. Verify that the light/dark theme switching is properly configured in the Android manifest
+3. Test color contrast ratios meet WCAG 2.1 accessibility standards
+4. Validate color scheme matches brand guidelines across all themes
+-->
+
+<!-- Material Design library version: 1.5.0 -->
+<!-- Implements light theme colors following Material Design 3.0 guidelines -->
+<resources>
+    <!-- Requirement: UI Framework Integration - Primary theme colors compatible with React Native Paper -->
+    <color name="colorPrimary">#2196F3</color>
+    <color name="colorPrimaryDark">#1976D2</color>
+    <color name="colorAccent">#FF4081</color>
+
+    <!-- Requirement: Theme Support - Light theme surface and background colors -->
+    <!-- Material Design light theme background (elevation level 0) -->
+    <color name="colorBackground">#FFFFFF</color>
+    <!-- Material Design light theme surface (elevation level 1) -->
+    <color name="colorSurface">#FFFFFF</color>
+    <!-- Material Design light theme error color -->
+    <color name="colorError">#B00020</color>
+
+    <!-- Requirement: Mobile Application Layout - Text colors for optimal readability -->
+    <!-- Primary text color with high emphasis -->
+    <color name="textColorPrimary">#000000</color>
+    <!-- Secondary text color with medium emphasis -->
+    <color name="textColorSecondary">#757575</color>
+    <!-- Divider color with low emphasis -->
+    <color name="dividerColor">#BDBDBD</color>
+
+    <!-- System UI colors for light theme -->
+    <color name="statusBarColor">#1976D2</color>
+    <color name="navigationBarColor">#000000</color>
+
+    <!-- Material Design light theme interaction color -->
+    <!-- Ripple effect color -->
+    <color name="rippleColor">#1976D2</color>
+
+    <!-- Semantic colors for feedback and status -->
+    <color name="successColor">#4CAF50</color>
+    <color name="warningColor">#FFC107</color>
+    <color name="infoColor">#2196F3</color>
+</resources>
