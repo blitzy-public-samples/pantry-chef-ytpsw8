@@ -1,0 +1,108 @@
+# Human Tasks:
+# 1. Verify that the web-service-account exists and has necessary permissions
+# 2. Ensure container image tag matches the current release version
+# 3. Confirm resource limits align with cluster capacity
+# 4. Verify health check endpoints are implemented in the web application
+# 5. Review pod anti-affinity settings match cluster topology
+
+# Kubernetes API Version: v1.24+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pantrychef-web
+  namespace: production
+  labels:
+    app: pantrychef
+    component: web
+    environment: production
+spec:
+  # Requirement: High Availability - Multi-replica deployment configuration for high availability across multiple availability zones
+  replicas: 3
+  
+  # Requirement: Container Orchestration - Rolling update strategy for zero-downtime deployments
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  
+  # Requirement: Web Application Deployment - Pod selector for the React web dashboard
+  selector:
+    matchLabels:
+      app: pantrychef
+      component: web
+  
+  template:
+    metadata:
+      labels:
+        app: pantrychef
+        component: web
+      # Requirement: Container Orchestration - Prometheus metrics configuration
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    
+    spec:
+      # Requirement: Web Application Deployment - Service account for web frontend
+      serviceAccountName: web-service-account
+      
+      # Requirement: Container Orchestration - Pod security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      containers:
+        # Requirement: Frontend Stack - React Native web application container
+        - name: web
+          image: pantrychef/web:latest
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+          
+          # Requirement: Container Orchestration - Resource limits and requests
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          
+          # Requirement: Container Orchestration - Container security context
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          
+          # Requirement: Container Orchestration - Health checks
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          
+          # Requirement: Web Application Deployment - Environment variables from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: app-config
+      
+      # Requirement: High Availability - Pod anti-affinity for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: pantrychef
+                    component: web
+                topologyKey: kubernetes.io/hostname
