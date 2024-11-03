@@ -1,0 +1,69 @@
+# Human Tasks:
+# 1. Ensure all developers have their own debug.keystore file locally
+# 2. Configure keystore.properties with release signing information locally
+# 3. Set up google-services.json in the app module locally
+# 4. Configure aws.properties with AWS credentials locally
+# 5. Set up firebase.properties with Firebase configuration locally
+# 6. Configure oauth.properties with OAuth client credentials locally
+
+# Build System Outputs
+# Addresses requirement: Android Development Environment - Build system outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+build/
+.gradle/
+app/build/
+captures/
+
+# IDE-specific Files
+# Addresses requirement: Android Development Environment - IDE configuration
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+.vscode/
+local.properties
+
+# Sensitive Data and Credentials
+# Addresses requirements: Security Architecture - Protection of sensitive data
+# Data Security - Secure key storage
+# Access Control - Secure credential management
+keystore.properties
+release.keystore
+google-services.json
+*.jks
+*.keystore
+aws.properties
+firebase.properties
+signing.properties
+
+# Security Files
+# Addresses requirements: Security Architecture - Protection of sensitive data
+# Data Security - AES-256 encryption implementation
+*.key
+*.p12
+*.pem
+oauth.properties
+secrets.xml
+debug.keystore
+
+# System Files
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.log
+
+# Dependencies
+# Addresses requirement: Mobile Application Requirements - Native Android application deployment
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
