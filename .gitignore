@@ -1,0 +1,189 @@
+# Human Tasks:
+# 1. Ensure all developers have consistent IDE settings to avoid unnecessary .idea/.vscode commits
+# 2. Configure local environment files (.env) with appropriate template values
+# 3. Set up proper key management for Android release keystores
+# 4. Configure proper certificate handling for iOS development and distribution profiles
+
+# Dependencies
+node_modules/
+ios/Pods/
+vendor/
+*.lock
+package-lock.json
+yarn.lock
+
+# Build Artifacts
+build/
+dist/
+*.apk
+*.ipa
+*.app
+*.xcarchive
+*.dSYM.zip
+*.hmap
+
+# Environment Files
+.env
+.env.*
+src/backend/.env
+src/web/.env
+infrastructure/terraform/*.tfvars
+infrastructure/kubernetes/secrets.yaml
+
+# IDE and Editor Files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+xcuserdata/
+*.xcworkspace
+
+# Logs and Caches
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+.gradle/
+coverage/
+
+# iOS
+ios/build/
+ios/Pods/
+ios/*.xcworkspace
+ios/*.pbxuser
+ios/*.mode1v3
+
+# Android
+android/build/
+android/app/build/
+android/local.properties
+android/keystore/release.keystore
+android/.gradle/
+
+# Temporary Files
+tmp/
+temp/
+.tmp
+*.tmp
+
+# Test Coverage
+coverage/
+.nyc_output/
+junit.xml
+
+# Cache Files
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vuepress/dist
+
+# System Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Backup Files
+*.bak
+*.backup
+*~
+
+# SSL/TLS Certificates
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.priv
+
+# Database Files
+*.sqlite
+*.sqlite3
+*.db
+
+# Compiled Files
+*.class
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Dependency Directories
+jspm_packages/
+bower_components/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variable files
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# Serverless directories
+.serverless/
+
+# AWS SAM build directories
+.aws-sam/
+
+# CDK asset staging directory
+.cdk.staging/
+cdk.out/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
