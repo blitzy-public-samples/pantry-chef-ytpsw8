@@ -1,0 +1,162 @@
+# Human Tasks:
+# 1. Configure Apple Developer Program membership and certificates
+# 2. Set up App Store Connect API key in GitHub Secrets
+# 3. Configure Match Git repository access credentials
+# 4. Set up code signing Git repository with proper access
+# 5. Configure notification settings for deployment alerts
+# 6. Verify Xcode Cloud integration settings
+
+# Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+name: iOS App Store Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (beta/production)'
+        required: true
+        default: 'beta'
+
+# Requirement: Security Protocols (9.3 Security Protocols/Security Update Management)
+env:
+  DEVELOPER_APP_ID: ${{ secrets.DEVELOPER_APP_ID }}
+  DEVELOPER_APP_IDENTIFIER: ${{ secrets.DEVELOPER_APP_IDENTIFIER }}
+  PROVISIONING_PROFILE_SPECIFIER: ${{ secrets.PROVISIONING_PROFILE_SPECIFIER }}
+  TEMP_KEYCHAIN_USER: ${{ secrets.TEMP_KEYCHAIN_USER }}
+  TEMP_KEYCHAIN_PASSWORD: ${{ secrets.TEMP_KEYCHAIN_PASSWORD }}
+  APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+  APPLE_KEY_ISSUER_ID: ${{ secrets.APPLE_KEY_ISSUER_ID }}
+  APPLE_KEY_CONTENT: ${{ secrets.APPLE_KEY_CONTENT }}
+  MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+  FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+  MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+  GIT_AUTHORIZATION: ${{ secrets.GIT_AUTHORIZATION }}
+  MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+
+jobs:
+  # Requirement: iOS Native Application (1.1 System Overview/Core Capabilities)
+  release_ios:
+    name: Build and deploy iOS app
+    runs-on: macos-latest
+    
+    steps:
+      # Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          
+      # Requirement: iOS Platform Support (1.2 Scope/System Boundaries)
+      - name: Set up Ruby environment
+        uses: actions/setup-ruby@v1
+        with:
+          ruby-version: '2.7'
+          
+      # Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+      - name: Cache Ruby gems
+        uses: actions/cache@v3
+        with:
+          path: vendor/bundle
+          key: ${{ runner.os }}-gems-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gems-
+            
+      # Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+      - name: Cache CocoaPods
+        uses: actions/cache@v3
+        with:
+          path: Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('**/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      # Requirement: Security Protocols (9.3 Security Protocols/Security Update Management)
+      - name: Install dependencies
+        run: |
+          gem install bundler
+          bundle config path vendor/bundle
+          bundle install --jobs 4 --retry 3
+          bundle exec pod install
+
+      # Requirement: Security Protocols (9.3 Security Protocols/Security Update Management)
+      - name: Setup temporary keychain
+        run: |
+          security create-keychain -p "$TEMP_KEYCHAIN_PASSWORD" build.keychain
+          security list-keychains -d user -s build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$TEMP_KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -l ~/Library/Keychains/build.keychain
+
+      # Requirement: Security Protocols (9.3 Security Protocols/Security Update Management)
+      - name: Setup code signing
+        run: |
+          bundle exec fastlane match development --readonly
+          bundle exec fastlane match appstore --readonly
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_KEYCHAIN_NAME: build.keychain
+          MATCH_KEYCHAIN_PASSWORD: ${{ secrets.TEMP_KEYCHAIN_PASSWORD }}
+
+      # Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+      - name: Run tests
+        run: bundle exec fastlane test
+        env:
+          DEVELOPER_APP_ID: ${{ secrets.DEVELOPER_APP_ID }}
+          DEVELOPER_APP_IDENTIFIER: ${{ secrets.DEVELOPER_APP_IDENTIFIER }}
+          PROVISIONING_PROFILE_SPECIFIER: ${{ secrets.PROVISIONING_PROFILE_SPECIFIER }}
+
+      # Requirement: iOS Native Application (1.1 System Overview/Core Capabilities)
+      - name: Build and deploy
+        run: |
+          if [ "${{ github.event.inputs.release_type }}" = "production" ]; then
+            bundle exec fastlane release
+          else
+            bundle exec fastlane beta
+          fi
+        env:
+          DEVELOPER_APP_ID: ${{ secrets.DEVELOPER_APP_ID }}
+          DEVELOPER_APP_IDENTIFIER: ${{ secrets.DEVELOPER_APP_IDENTIFIER }}
+          PROVISIONING_PROFILE_SPECIFIER: ${{ secrets.PROVISIONING_PROFILE_SPECIFIER }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD }}
+
+      # Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: |
+            ${{ github.workspace }}/build
+            ${{ github.workspace }}/fastlane/test_output
+            
+      # Requirement: Security Protocols (9.3 Security Protocols/Security Update Management)
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain build.keychain
+          
+      # Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+      - name: Create GitHub Release
+        if: github.event.inputs.release_type == 'production'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ github.workspace }}/build/*.ipa
+            ${{ github.workspace }}/build/*.dSYM.zip
+          body_path: ${{ github.workspace }}/fastlane/release_notes.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+      - name: Notify team
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "::notice::iOS deployment completed successfully!"
+          else
+            echo "::error::iOS deployment failed!"
+          fi
