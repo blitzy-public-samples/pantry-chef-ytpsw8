@@ -1,0 +1,56 @@
+# Human Tasks:
+# 1. Create a private Git repository for storing certificates and provisioning profiles
+# 2. Configure Git repository access credentials in CI/CD pipeline
+# 3. Ensure Apple Developer account has sufficient permissions for certificate management
+# 4. Set up environment variables for sensitive data (username, git URL)
+
+# Requirement: Security Architecture (5.6 Security Architecture/Access Control Measures)
+# Git repository URL for storing encrypted iOS certificates and provisioning profiles
+git_url(ENV["MATCH_GIT_URL"] || "git@github.com:pantrychef/certificates.git")
+
+# Requirement: Security Architecture (5.6 Security Architecture/Access Control Measures)
+# Storage mode for certificates - using git for team sharing and version control
+storage_mode("git")
+
+# Requirement: iOS Native Application (1.1 System Overview/Core Capabilities)
+# Type of certificates to sync (development, appstore, adhoc)
+type("development")
+
+# Requirement: Security Architecture (5.6 Security Architecture/Access Control Measures)
+# Set to true to prevent modifications to certificates (recommended for CI)
+readonly(true)
+
+# Requirement: iOS Native Application (1.1 System Overview/Core Capabilities)
+# App bundle identifiers to manage certificates for
+app_identifier([
+  "com.pantrychef.ios"
+])
+
+# Requirement: Security Architecture (5.6 Security Architecture/Access Control Measures)
+# Apple ID username for certificate management
+username(ENV["MATCH_USERNAME"] || "developer@pantrychef.com")
+
+# Requirement: Security Architecture (5.6 Security Architecture/Access Control Measures)
+# Apple Developer Team ID for certificate ownership
+team_id(ENV["MATCH_TEAM_ID"] || "ABCD12345E")
+
+# Requirement: CI/CD Pipeline (10.5 CI/CD Pipeline/Pipeline Architecture)
+# Git branch to store certificates (supports multiple environments)
+git_branch("main")
+
+# Requirement: iOS Native Application (1.1 System Overview/Core Capabilities)
+# Platform specification for certificate management
+platform("ios")
+
+# Force match to recreate the certificates if they already exist
+force(false)
+
+# Skip confirmation prompts in CI environment
+skip_confirmation(true)
+
+# Verbose output for debugging
+verbose(true)
+
+# Additional security measures
+shallow_clone(true)
+clone_branch_directly(true)
