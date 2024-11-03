@@ -1,0 +1,119 @@
+# Requirement: Web Dashboard Deployment - Production deployment configuration for web dashboard component
+version: '3.8'
+
+# Requirement: High Availability Architecture - Container orchestration with high availability
+services:
+  # Web dashboard production service with React Native and Redux
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: production
+      args:
+        - NODE_ENV=production
+        - NEXT_TELEMETRY_DISABLED=1
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${API_URL}
+      - NEXT_PUBLIC_WS_URL=${WS_URL}
+      - REDIS_URL=${REDIS_URL}
+    networks:
+      - pantrychef-web
+
+  # Requirement: Security Architecture - Reverse proxy with TLS 1.3 termination
+  nginx:
+    image: nginx:1.21-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - static_content:/usr/share/nginx/html:ro
+    depends_on:
+      - web
+    networks:
+      - pantrychef-web
+    deploy:
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+
+  # Requirement: High Availability Architecture - Session store and caching layer
+  redis:
+    image: redis:6.2-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+    networks:
+      - pantrychef-web
+
+# Requirement: High Availability Architecture - Persistent storage configuration
+volumes:
+  static_content:
+    name: static_content
+    driver: local
+  redis_data:
+    name: redis_data
+    driver: local
+
+# Requirement: Security Architecture - Production network with encryption
+networks:
+  pantrychef-web:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: "true"
+
+# Requirement: Security Architecture - Secrets management
+secrets:
+  ssl_certificate:
+    file: ./nginx/ssl/server.crt
+  ssl_certificate_key:
+    file: ./nginx/ssl/server.key
+  redis_password:
+    file: ./redis/redis.password
+
+# Requirement: High Availability Architecture - Logging configuration
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Requirement: Security Architecture - Default security options
+x-security-opts: &security-opts
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+
+# Requirement: High Availability Architecture - Health check defaults
+x-healthcheck: &default-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 10s
