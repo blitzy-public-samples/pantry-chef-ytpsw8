@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Human Tasks:
+1. Verify all strings are properly translated in other language resource files (values-es, values-fr, etc.)
+2. Test RTL layout support for Arabic and Hebrew translations
+3. Validate string formatting parameters are consistent across translations
+4. Ensure accessibility content descriptions are meaningful and helpful
+5. Test text scaling for different device font sizes
+-->
+
+<resources>
+    <!-- 
+    Requirement: Mobile Platform Support
+    Application name used in launcher and app bar
+    Non-translatable as it's a brand name
+    -->
+    <string name="app_name" translatable="false">PantryChef</string>
+
+    <!-- 
+    Requirement: Core Capabilities
+    Camera permission dialog strings
+    -->
+    <string name="camera_permission_title">Camera Access Required</string>
+    <string name="camera_permission_message">PantryChef needs camera access to scan ingredients</string>
+
+    <!-- 
+    Requirement: Core Capabilities
+    Storage permission dialog strings
+    -->
+    <string name="storage_permission_title">Storage Access Required</string>
+    <string name="storage_permission_message">PantryChef needs storage access to save ingredient photos</string>
+
+    <!-- 
+    Requirement: Navigation Flow
+    Bottom navigation labels
+    -->
+    <string name="nav_home">Home</string>
+    <string name="nav_camera">Camera</string>
+    <string name="nav_pantry">Pantry</string>
+    <string name="nav_recipes">Recipes</string>
+    <string name="nav_profile">Profile</string>
+
+    <!-- 
+    Requirement: User Interface Design
+    Error messages
+    -->
+    <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="error_network">Network error. Please check your connection.</string>
+    <string name="error_camera">Camera error. Please try again.</string>
+
+    <!-- 
+    Requirement: User Interface Design
+    Common button labels
+    -->
+    <string name="button_retry">Retry</string>
+    <string name="button_ok">OK</string>
+    <string name="button_cancel">Cancel</string>
+    <string name="button_save">Save</string>
+
+    <!-- 
+    Requirement: Mobile Platform Support
+    Accessibility content descriptions
+    -->
+    <string name="content_desc_app_icon">PantryChef app icon</string>
+    <string name="content_desc_nav_home">Navigate to home screen</string>
+    <string name="content_desc_nav_camera">Open camera</string>
+    <string name="content_desc_nav_pantry">View pantry</string>
+    <string name="content_desc_nav_recipes">Browse recipes</string>
+    <string name="content_desc_nav_profile">View profile</string>
+</resources>
