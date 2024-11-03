@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+Human Tasks:
+1. Ensure the Material Design library (com.google.android.material:material:1.5.0) is included in the app/build.gradle file
+2. Verify that the dark theme is properly configured in the Android manifest and theme files
+3. Test the color scheme under different screen brightness settings to ensure proper contrast
+-->
+
+<!-- Material Design library version: 1.5.0 -->
+<!-- Implements dark theme colors following Material Design guidelines -->
+<resources>
+    <!-- Requirement: UI Framework Integration - Primary theme colors compatible with React Native Paper -->
+    <color name="colorPrimary">#1976D2</color>
+    <color name="colorPrimaryDark">#0D47A1</color>
+    <color name="colorAccent">#FF80AB</color>
+
+    <!-- Requirement: Theme Support - Dark theme surface and background colors -->
+    <!-- Material Design dark theme background (elevation level 0) -->
+    <color name="colorBackground">#121212</color>
+    <!-- Material Design dark theme surface (elevation level 1) -->
+    <color name="colorSurface">#1E1E1E</color>
+    <!-- Material Design dark theme error color -->
+    <color name="colorError">#CF6679</color>
+
+    <!-- Requirement: Mobile Application Layout - Text colors for improved visibility -->
+    <!-- Primary text color with 100% opacity -->
+    <color name="textColorPrimary">#FFFFFF</color>
+    <!-- Secondary text color with 70% opacity -->
+    <color name="textColorSecondary">#B3FFFFFF</color>
+    <!-- Divider color with 12% opacity -->
+    <color name="dividerColor">#1FFFFFFF</color>
+
+    <!-- System UI colors for dark theme -->
+    <color name="statusBarColor">#000000</color>
+    <color name="navigationBarColor">#000000</color>
+
+    <!-- Material Design dark theme interaction color -->
+    <!-- Ripple effect with 12% opacity -->
+    <color name="rippleColor">#FFFFFF1F</color>
+
+    <!-- Semantic colors for feedback and status -->
+    <color name="successColor">#4CAF50</color>
+    <color name="warningColor">#FFA000</color>
+    <color name="infoColor">#2196F3</color>
+</resources>
