@@ -1,0 +1,251 @@
+# Fastlane configuration file for PantryChef Android app
+# Version: 2.210.1
+
+# HUMAN TASKS:
+# 1. Configure Google Play Console API credentials (google-play-api-key.json)
+# 2. Set up Firebase App Distribution access and groups
+# 3. Configure Slack webhook URL for notifications
+# 4. Verify keystore configuration in local.properties
+# 5. Set up required environment variables in CI system
+
+# Requirement: CI/CD Pipeline Architecture - Default configuration
+default_platform(:android)
+
+# Requirement: CI/CD Pipeline Architecture - Platform configuration
+platform :android do
+  # Requirement: CI/CD Pipeline Architecture - Pre-execution setup
+  before_all do |lane, options|
+    # Verify environment is clean and ready
+    ensure_git_status_clean
+    git_branch = git_branch()
+    unless git_branch == "main" || git_branch.start_with?("release/")
+      UI.user_error!("Deployments must be from main or release/* branches")
+    end
+    
+    # Verify required credentials
+    unless File.exist?("../app/keystore/release.keystore")
+      UI.user_error!("Release keystore not found")
+    end
+    
+    # Setup environment
+    ENV["GRADLE_PATH"] = "./gradlew"
+    ENV["ANDROID_HOME"] = ENV["ANDROID_SDK_ROOT"]
+  end
+
+  # Requirement: CI/CD Pipeline Architecture - Test execution lane
+  desc "Run all unit and instrumentation tests"
+  lane :test do
+    # Run unit tests
+    gradle(
+      task: "test",
+      build_type: "debug",
+      properties: {
+        "testCoverage" => "true"
+      }
+    )
+
+    # Run instrumentation tests
+    gradle(
+      task: "connectedAndroidTest",
+      build_type: "debug"
+    )
+
+    # Generate and upload test reports
+    junit_report = parse_junit_report
+    upload_to_testfairy(junit_report)
+  end
+
+  # Requirement: CI/CD Pipeline Architecture - Debug build lane
+  desc "Build debug variant of the application"
+  lane :build_debug do
+    # Clean project
+    gradle(task: "clean")
+
+    # Build debug APK
+    gradle(
+      task: "assembleDebug",
+      properties: {
+        "android.injected.signing.store.file" => "debug.keystore",
+        "android.injected.signing.store.password" => "android",
+        "android.injected.signing.key.alias" => "androiddebugkey",
+        "android.injected.signing.key.password" => "android"
+      }
+    )
+
+    # Store artifacts
+    apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
+    artifacts_dir = "artifacts/debug"
+    FileUtils.mkdir_p(artifacts_dir)
+    FileUtils.cp(apk_path, artifacts_dir)
+    
+    apk_path
+  end
+
+  # Requirement: CI/CD Pipeline Architecture - Release build lane
+  desc "Build release variant of the application"
+  lane :build_release do
+    # Clean project
+    gradle(task: "clean")
+
+    # Build release AAB
+    gradle(
+      task: "bundleRelease",
+      properties: {
+        "android.injected.signing.store.file" => ENV["RELEASE_STORE_FILE"],
+        "android.injected.signing.store.password" => ENV["RELEASE_STORE_PASSWORD"],
+        "android.injected.signing.key.alias" => ENV["RELEASE_KEY_ALIAS"],
+        "android.injected.signing.key.password" => ENV["RELEASE_KEY_PASSWORD"]
+      }
+    )
+
+    # Verify bundle with bundletool
+    bundle_path = lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH]
+    sh("bundletool validate --bundle=#{bundle_path}")
+
+    # Store artifacts
+    artifacts_dir = "artifacts/release"
+    FileUtils.mkdir_p(artifacts_dir)
+    FileUtils.cp(bundle_path, artifacts_dir)
+    
+    bundle_path
+  end
+
+  # Requirement: Deployment Process - Internal track deployment
+  desc "Deploy to internal testing track"
+  lane :deploy_internal do
+    # Build release bundle
+    aab_path = build_release
+
+    # Upload to internal track
+    upload_to_play_store(
+      track: 'internal',
+      aab: aab_path,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: 'completed'
+    )
+
+    # Update release notes
+    sh("./scripts/update_changelog.sh internal")
+
+    # Notify QA team
+    slack(
+      message: "New internal build deployed: #{lane_context[SharedValues::VERSION_NAME]}",
+      success: true,
+      payload: {
+        "Build Number" => lane_context[SharedValues::BUILD_NUMBER],
+        "Version" => lane_context[SharedValues::VERSION_NAME]
+      }
+    )
+
+    # Tag release
+    tag = "internal-v#{lane_context[SharedValues::VERSION_NAME]}"
+    add_git_tag(tag: tag)
+    push_git_tags
+  end
+
+  # Requirement: Deployment Process - Beta track deployment
+  desc "Deploy to beta testing track"
+  lane :deploy_beta do
+    # Verify tests
+    test
+
+    # Build release bundle
+    aab_path = build_release
+
+    # Upload to beta track
+    upload_to_play_store(
+      track: 'beta',
+      aab: aab_path,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: 'completed'
+    )
+
+    # Update release notes
+    sh("./scripts/update_changelog.sh beta")
+
+    # Notify beta testers via Firebase
+    firebase_app_distribution(
+      app: ENV["FIREBASE_APP_ID"],
+      groups: "beta-testers",
+      release_notes: File.read("metadata/android/en-US/changelogs/default.txt")
+    )
+
+    # Tag release
+    tag = "beta-v#{lane_context[SharedValues::VERSION_NAME]}"
+    add_git_tag(tag: tag)
+    push_git_tags
+  end
+
+  # Requirement: Deployment Process - Production deployment
+  desc "Deploy to production track"
+  lane :deploy_production do
+    # Verify all tests passing
+    test
+
+    # Verify beta validation
+    ensure_beta_validation
+
+    # Build release bundle with ProGuard
+    aab_path = build_release
+
+    # Upload to production track
+    upload_to_play_store(
+      track: 'production',
+      aab: aab_path,
+      skip_upload_metadata: false,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
+      release_status: 'completed'
+    )
+
+    # Update release notes and changelog
+    sh("./scripts/update_changelog.sh production")
+
+    # Create git tag with version
+    tag = "v#{lane_context[SharedValues::VERSION_NAME]}"
+    add_git_tag(tag: tag)
+    push_git_tags
+
+    # Notify stakeholders
+    slack(
+      message: "🚀 New production release: #{lane_context[SharedValues::VERSION_NAME]}",
+      success: true,
+      payload: {
+        "Version" => lane_context[SharedValues::VERSION_NAME],
+        "Build Number" => lane_context[SharedValues::BUILD_NUMBER],
+        "Release Notes" => File.read("metadata/android/en-US/changelogs/default.txt")
+      }
+    )
+
+    # Generate release documentation
+    sh("./scripts/generate_release_docs.sh")
+  end
+
+  # Requirement: Security Protocols - Beta validation check
+  def ensure_beta_validation
+    beta_validation = google_play_track_version_codes(
+      track: 'beta'
+    )
+    
+    unless beta_validation.empty?
+      UI.user_error!("Beta track validation must be completed before production release")
+    end
+  end
+
+  # Error handling for all lanes
+  error do |lane, exception|
+    slack(
+      message: "❌ Error in lane #{lane}: #{exception.message}",
+      success: false,
+      payload: {
+        "Lane" => lane,
+        "Error" => exception.message,
+        "Backtrace" => exception.backtrace.first
+      }
+    )
+  end
+end
