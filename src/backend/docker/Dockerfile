@@ -7,7 +7,7 @@
 
 # Stage 1: Builder
 # Requirement: Backend Container Configuration - Configures Node.js API service container with optimized Alpine base image
-FROM node:16-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Install build dependencies
 # Requirement: Backend Technology Stack - Sets up Node.js runtime environment with required dependencies
@@ -43,7 +43,7 @@ RUN npm prune --production
 
 # Stage 2: Production
 # Requirement: Production Environment Setup - Configures production-ready container with security and performance optimizations
-FROM node:16-alpine
+FROM node:20-alpine AS production
 
 # Install production dependencies
 RUN apk add --no-cache \
@@ -57,8 +57,9 @@ RUN apk add --no-cache \
 
 # Create non-root user and group
 # Requirement: Production Environment Setup - Security optimization
-RUN addgroup -g 1001 -S node && \
-    adduser -u 1001 -S node -G node
+# RUN adduser -u 1001 -S node -G node
+# RUN addgroup -g 1001 -S node && \
+#     adduser -u 1001 -S node -G node
 
 # Set working directory
 WORKDIR /app

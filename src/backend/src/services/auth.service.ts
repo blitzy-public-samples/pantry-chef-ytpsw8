@@ -5,7 +5,7 @@ import { User, UserPreferences } from '../interfaces/user.interface';
 import UserModel from '../models/user.model';
 import { jwtConfig } from '../config/jwt';
 import { AppError, CommonErrors } from '../utils/errors';
-import jwt from 'jsonwebtoken';
+import jwt, { Algorithm } from 'jsonwebtoken';
 
 /**
  * HUMAN TASKS:
@@ -30,12 +30,12 @@ interface LoginCredentials {
  * Interface for new user registration data
  * Requirement: User Authentication - Comprehensive registration data
  */
-interface RegisterData {
+export interface RegisterData {
   email: string;
   password: string;
   firstName: string;
   lastName: string;
-  preferences: UserPreferences;
+  preferences: Partial<UserPreferences>;
 }
 
 /**
@@ -78,7 +78,7 @@ export class AuthService {
       }
 
       // Find user by email
-      const user = await this.userModel.findOne({ email: credentials.email });
+      const user: User = (await this.userModel.findOne({ email: credentials.email }))!;
       if (!user) {
         throw CommonErrors.Unauthorized({ context: 'Invalid credentials' });
       }
@@ -94,15 +94,15 @@ export class AuthService {
 
       // Update last login timestamp
       await this.userModel.findByIdAndUpdate(user.id, {
-        lastLogin: new Date()
+        lastLogin: new Date(),
       });
 
       return tokens;
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof AppError) throw error;
       throw CommonErrors.InternalServerError({
         context: 'Login failed',
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -113,7 +113,7 @@ export class AuthService {
    * - User Authentication: Secure registration process
    * - Data Security: Password encryption
    */
-  public async register(userData: RegisterData): Promise<User> {
+  public async register(userData: RegisterData): Promise<Partial<User>> {
     try {
       // Validate registration data
       if (!userData.email || !userData.password) {
@@ -132,7 +132,7 @@ export class AuthService {
         passwordHash: userData.password, // Will be hashed by mongoose middleware
         firstName: userData.firstName,
         lastName: userData.lastName,
-        preferences: userData.preferences
+        preferences: userData.preferences,
       });
 
       // Save user to database
@@ -140,12 +140,12 @@ export class AuthService {
 
       // Return user without sensitive data
       const { passwordHash, ...userWithoutPassword } = user.toObject();
-      return userWithoutPassword as User;
-    } catch (error) {
+      return userWithoutPassword as Partial<User>;
+    } catch (error: any) {
       if (error instanceof AppError) throw error;
       throw CommonErrors.InternalServerError({
         context: 'Registration failed',
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -172,7 +172,7 @@ export class AuthService {
 
       // Generate new token pair
       return await this.generateAuthTokens(user.id);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof jwt.TokenExpiredError) {
         throw CommonErrors.Unauthorized({ context: 'Refresh token expired' });
       }
@@ -182,7 +182,7 @@ export class AuthService {
       if (error instanceof AppError) throw error;
       throw CommonErrors.InternalServerError({
         context: 'Token refresh failed',
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -197,7 +197,7 @@ export class AuthService {
     try {
       // Verify token signature and expiration
       const decoded = jwt.verify(token, this.jwtConfig.secret, {
-        algorithms: this.jwtConfig.allowedAlgorithms
+        algorithms: this.jwtConfig.allowedAlgorithms as Algorithm[],
       });
 
       // Verify token payload
@@ -206,7 +206,7 @@ export class AuthService {
       }
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
       return false;
     }
   }
@@ -219,24 +219,16 @@ export class AuthService {
    */
   private async generateAuthTokens(userId: string): Promise<AuthTokens> {
     // Generate access token
-    const accessToken = jwt.sign(
-      { userId },
-      this.jwtConfig.secret,
-      {
-        algorithm: this.jwtConfig.algorithm as jwt.Algorithm,
-        expiresIn: this.jwtConfig.expiresIn
-      }
-    );
+    const accessToken = jwt.sign({ userId }, this.jwtConfig.secret, {
+      algorithm: this.jwtConfig.algorithm as jwt.Algorithm,
+      expiresIn: this.jwtConfig.expiresIn,
+    });
 
     // Generate refresh token
-    const refreshToken = jwt.sign(
-      { userId },
-      this.jwtConfig.secret,
-      {
-        algorithm: this.jwtConfig.algorithm as jwt.Algorithm,
-        expiresIn: this.jwtConfig.refreshExpiresIn
-      }
-    );
+    const refreshToken = jwt.sign({ userId }, this.jwtConfig.secret, {
+      algorithm: this.jwtConfig.algorithm as jwt.Algorithm,
+      expiresIn: this.jwtConfig.refreshExpiresIn,
+    });
 
     // Parse expiration time from JWT config
     const expiresIn = parseInt(this.jwtConfig.expiresIn);
@@ -244,7 +236,7 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      expiresIn
+      expiresIn,
     };
   }
 }

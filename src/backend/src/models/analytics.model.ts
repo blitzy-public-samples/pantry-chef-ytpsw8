@@ -2,11 +2,11 @@
 
 import { Schema, model, Model } from 'mongoose';
 import {
-    UserActivityMetrics,
-    SystemPerformanceMetrics,
-    RecipeAnalytics,
-    IngredientRecognitionMetrics,
-    AnalyticsTimeframe
+  UserActivityMetrics,
+  SystemPerformanceMetrics,
+  RecipeAnalytics,
+  IngredientRecognitionMetrics,
+  AnalyticsTimeframe,
 } from '../interfaces/analytics.interface';
 
 /**
@@ -18,177 +18,189 @@ import {
  */
 
 // Addresses requirement: Usage Tracking - Analytics Service for monitoring user engagement
-const UserActivitySchema = new Schema<UserActivityMetrics>({
+const UserActivitySchema = new Schema<UserActivityMetrics>(
+  {
     userId: {
-        type: Schema.Types.ObjectId,
-        required: true,
-        ref: 'User',
-        index: true
+      type: String,
+      required: true,
+      ref: 'User',
+      index: true,
     },
     recipeViews: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     recipeSaves: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     ingredientScans: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     shoppingListsCreated: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     lastActive: {
-        type: Date,
-        required: true,
-        default: Date.now
-    }
-}, {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+  },
+  {
     timestamps: true,
-    versionKey: false
-});
+    versionKey: false,
+  }
+);
 
 // Addresses requirement: System Metrics - Performance, reliability, and resource metrics tracking
-const SystemPerformanceSchema = new Schema<SystemPerformanceMetrics>({
+const SystemPerformanceSchema = new Schema<SystemPerformanceMetrics>(
+  {
     apiResponseTime: {
-        type: Number,
-        required: true,
-        min: 0,
-        index: true // Index for performance monitoring queries
+      type: Number,
+      required: true,
+      min: 0,
+      index: true, // Index for performance monitoring queries
     },
     imageProcessingTime: {
-        type: Number,
-        required: true,
-        min: 0,
-        index: true // Index for image processing performance tracking
+      type: Number,
+      required: true,
+      min: 0,
+      index: true, // Index for image processing performance tracking
     },
     concurrentUsers: {
-        type: Number,
-        required: true,
-        min: 0
+      type: Number,
+      required: true,
+      min: 0,
     },
     errorRate: {
-        type: Number,
-        required: true,
-        min: 0,
-        max: 100
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
     },
     cpuUsage: {
-        type: Number,
-        required: true,
-        min: 0,
-        max: 100,
-        index: true // Index for resource utilization monitoring
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
+      index: true, // Index for resource utilization monitoring
     },
     memoryUsage: {
-        type: Number,
-        required: true,
-        min: 0,
-        max: 100,
-        index: true // Index for resource utilization monitoring
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
+      index: true, // Index for resource utilization monitoring
     },
     timestamp: {
-        type: Date,
-        required: true,
-        default: Date.now,
-        index: true // Index for time-based queries
-    }
-}, {
+      type: Date,
+      required: true,
+      default: Date.now,
+      index: true, // Index for time-based queries
+    },
+  },
+  {
     timestamps: true,
-    versionKey: false
-});
+    versionKey: false,
+  }
+);
 
 // Addresses requirement: Analytics and Reporting - Tracking system metrics and user behavior
-const RecipeAnalyticsSchema = new Schema<RecipeAnalytics>({
+const RecipeAnalyticsSchema = new Schema<RecipeAnalytics>(
+  {
     recipeId: {
-        type: Schema.Types.ObjectId,
-        required: true,
-        ref: 'Recipe',
-        index: true
+      type: String,
+      required: true,
+      ref: 'Recipe',
+      index: true,
     },
     viewCount: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     saveCount: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     averageRating: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0,
-        max: 5
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+      max: 5,
     },
     completionCount: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     updatedAt: {
-        type: Date,
-        required: true,
-        default: Date.now
-    }
-}, {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+  },
+  {
     timestamps: true,
-    versionKey: false
-});
+    versionKey: false,
+  }
+);
 
 // Addresses requirement: Analytics and Reporting - System metrics tracking
-const IngredientRecognitionSchema = new Schema<IngredientRecognitionMetrics>({
+const IngredientRecognitionSchema = new Schema<IngredientRecognitionMetrics>(
+  {
     totalScans: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     successfulScans: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     averageConfidence: {
-        type: Number,
-        required: true,
-        min: 0,
-        max: 100,
-        default: 0
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
+      default: 0,
     },
     manualCorrections: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
     },
     processingTime: {
-        type: Number,
-        required: true,
-        min: 0,
-        index: true // Index for performance monitoring
-    }
-}, {
+      type: Number,
+      required: true,
+      min: 0,
+      index: true, // Index for performance monitoring
+    },
+  },
+  {
     timestamps: true,
-    versionKey: false
-});
+    versionKey: false,
+  }
+);
 
 // Create compound indexes for efficient querying
 UserActivitySchema.index({ userId: 1, lastActive: -1 });
@@ -199,7 +211,15 @@ RecipeAnalyticsSchema.index({ recipeId: 1, averageRating: -1 });
 IngredientRecognitionSchema.index({ processingTime: 1, averageConfidence: -1 });
 
 // Create models with strict type checking
-export const UserActivityModel: Model<UserActivityMetrics> = model<UserActivityMetrics>('UserActivity', UserActivitySchema);
-export const SystemPerformanceModel: Model<SystemPerformanceMetrics> = model<SystemPerformanceMetrics>('SystemPerformance', SystemPerformanceSchema);
-export const RecipeAnalyticsModel: Model<RecipeAnalytics> = model<RecipeAnalytics>('RecipeAnalytics', RecipeAnalyticsSchema);
-export const IngredientRecognitionModel: Model<IngredientRecognitionMetrics> = model<IngredientRecognitionMetrics>('IngredientRecognition', IngredientRecognitionSchema);
+export const UserActivityModel: Model<UserActivityMetrics> = model<UserActivityMetrics>(
+  'UserActivity',
+  UserActivitySchema
+);
+export const SystemPerformanceModel: Model<SystemPerformanceMetrics> =
+  model<SystemPerformanceMetrics>('SystemPerformance', SystemPerformanceSchema);
+export const RecipeAnalyticsModel: Model<RecipeAnalytics> = model<RecipeAnalytics>(
+  'RecipeAnalytics',
+  RecipeAnalyticsSchema
+);
+export const IngredientRecognitionModel: Model<IngredientRecognitionMetrics> =
+  model<IngredientRecognitionMetrics>('IngredientRecognition', IngredientRecognitionSchema);

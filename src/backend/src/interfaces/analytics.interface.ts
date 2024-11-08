@@ -1,7 +1,5 @@
 // @version mongoose ^6.0.0
 
-import { id } from '../interfaces/recipe.interface';
-
 /**
  * HUMAN TASKS:
  * 1. Verify that analytics collection intervals align with business reporting requirements
@@ -14,12 +12,12 @@ import { id } from '../interfaces/recipe.interface';
  * Addresses requirement: Usage Tracking - Analytics Service for monitoring user engagement
  */
 export interface UserActivityMetrics {
-    userId: string;
-    recipeViews: number;
-    recipeSaves: number;
-    ingredientScans: number;
-    shoppingListsCreated: number;
-    lastActive: Date;
+  userId: string;
+  recipeViews: number;
+  recipeSaves: number;
+  ingredientScans: number;
+  shoppingListsCreated: number;
+  lastActive: Date;
 }
 
 /**
@@ -27,13 +25,13 @@ export interface UserActivityMetrics {
  * Addresses requirement: System Metrics - Performance, reliability, and resource metrics tracking
  */
 export interface SystemPerformanceMetrics {
-    apiResponseTime: number;      // in milliseconds, target <200ms
-    imageProcessingTime: number;  // in milliseconds, target <3s
-    concurrentUsers: number;
-    errorRate: number;           // as percentage
-    cpuUsage: number;           // as percentage, threshold <70%
-    memoryUsage: number;        // as percentage, threshold <80%
-    timestamp: Date;
+  apiResponseTime: number; // in milliseconds, target <200ms
+  imageProcessingTime: number; // in milliseconds, target <3s
+  concurrentUsers: number;
+  errorRate: number; // as percentage
+  cpuUsage: number; // as percentage, threshold <70%
+  memoryUsage: number; // as percentage, threshold <80%
+  timestamp: Date;
 }
 
 /**
@@ -41,12 +39,12 @@ export interface SystemPerformanceMetrics {
  * Addresses requirement: Analytics and Reporting - Tracking system metrics and user behavior
  */
 export interface RecipeAnalytics {
-    recipeId: string;
-    viewCount: number;
-    saveCount: number;
-    averageRating: number;
-    completionCount: number;
-    updatedAt: Date;
+  recipeId: string;
+  viewCount: number;
+  saveCount: number;
+  averageRating: number;
+  completionCount: number;
+  updatedAt: Date;
 }
 
 /**
@@ -54,11 +52,11 @@ export interface RecipeAnalytics {
  * Addresses requirement: Analytics and Reporting - System metrics tracking
  */
 export interface IngredientRecognitionMetrics {
-    totalScans: number;
-    successfulScans: number;
-    averageConfidence: number;   // as percentage
-    manualCorrections: number;
-    processingTime: number;      // in milliseconds
+  totalScans: number;
+  successfulScans: number;
+  averageConfidence: number; // as percentage
+  manualCorrections: number;
+  processingTime: number; // in milliseconds
 }
 
 /**
@@ -66,8 +64,8 @@ export interface IngredientRecognitionMetrics {
  * Addresses requirement: Analytics and Reporting - Tracking system metrics
  */
 export enum AnalyticsTimeframe {
-    HOURLY = 'HOURLY',
-    DAILY = 'DAILY',
-    WEEKLY = 'WEEKLY',
-    MONTHLY = 'MONTHLY'
+  HOURLY = 'HOURLY',
+  DAILY = 'DAILY',
+  WEEKLY = 'WEEKLY',
+  MONTHLY = 'MONTHLY',
 }

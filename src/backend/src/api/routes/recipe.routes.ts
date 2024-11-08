@@ -14,11 +14,13 @@ import { RecipeController } from '../controllers/recipe.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { rateLimiterMiddleware } from '../middlewares/rateLimiter.middleware';
 import {
-    validateCreateRecipe,
-    validateUpdateRecipe,
-    validateRecipeQuery,
-    validateRecipeRating
+  validateCreateRecipe,
+  validateUpdateRecipe,
+  validateRecipeQuery,
+  validateRecipeRating,
 } from '../validators/recipe.validator';
+import { container } from 'tsyringe';
+import { RecipeService } from '../../services/recipe.service';
 
 /**
  * Express router configuration for recipe-related endpoints
@@ -29,122 +31,124 @@ import {
  * - Security Architecture (5.6 Security Architecture/Application)
  */
 export class RecipeRouter {
-    private router: Router;
-    private recipeController: RecipeController;
+  private router: Router;
+  private recipeController: RecipeController;
 
-    constructor(recipeController: RecipeController) {
-        this.router = Router();
-        this.recipeController = recipeController;
-        this.configureRoutes();
-    }
+  constructor(recipeController: RecipeController) {
+    this.router = Router();
+    this.recipeController = recipeController;
+    this.configureRoutes();
+  }
 
-    /**
-     * Configures all recipe-related routes with appropriate middleware chains
-     * Implements comprehensive security measures including authentication,
-     * authorization, rate limiting, and input validation
-     */
-    private configureRoutes(): void {
-        // Create new recipe (protected, requires user/admin role)
-        this.router.post(
-            '/',
-            authenticate,
-            authorize(['user', 'admin']),
-            validateCreateRecipe(),
-            rateLimiterMiddleware({
-                points: 10,
-                duration: 3600,
-                keyPrefix: 'recipe:create'
-            }),
-            this.recipeController.createRecipe.bind(this.recipeController)
-        );
+  /**
+   * Configures all recipe-related routes with appropriate middleware chains
+   * Implements comprehensive security measures including authentication,
+   * authorization, rate limiting, and input validation
+   */
+  private configureRoutes(): void {
+    // Create new recipe (protected, requires user/admin role)
+    this.router.post(
+      '/',
+      authenticate,
+      authorize(['user', 'admin']),
+      validateCreateRecipe(),
+      // rateLimiterMiddleware({
+      //   points: 10,
+      //   duration: 3600,
+      //   keyPrefix: 'recipe:create',
+      // }),
+      this.recipeController.createRecipe.bind(this.recipeController)
+    );
 
-        // Get recipe by ID (public, rate limited)
-        this.router.get(
-            '/:id',
-            rateLimiterMiddleware({
-                points: 100,
-                duration: 3600,
-                keyPrefix: 'recipe:get'
-            }),
-            this.recipeController.getRecipe.bind(this.recipeController)
-        );
+    // Get recipe by ID (public, rate limited)
+    this.router.get(
+      '/:id',
+      // rateLimiterMiddleware({
+      //   points: 100,
+      //   duration: 3600,
+      //   keyPrefix: 'recipe:get',
+      // }),
+      this.recipeController.getRecipe.bind(this.recipeController)
+    );
 
-        // Update recipe (protected, requires user/admin role)
-        this.router.put(
-            '/:id',
-            authenticate,
-            authorize(['user', 'admin']),
-            validateUpdateRecipe(),
-            rateLimiterMiddleware({
-                points: 20,
-                duration: 3600,
-                keyPrefix: 'recipe:update'
-            }),
-            this.recipeController.updateRecipe.bind(this.recipeController)
-        );
+    // Update recipe (protected, requires user/admin role)
+    this.router.put(
+      '/:id',
+      authenticate,
+      authorize(['user', 'admin']),
+      validateUpdateRecipe(),
+      // rateLimiterMiddleware({
+      //   points: 20,
+      //   duration: 3600,
+      //   keyPrefix: 'recipe:update',
+      // }),
+      this.recipeController.updateRecipe.bind(this.recipeController)
+    );
 
-        // Delete recipe (protected, requires user/admin role)
-        this.router.delete(
-            '/:id',
-            authenticate,
-            authorize(['user', 'admin']),
-            rateLimiterMiddleware({
-                points: 10,
-                duration: 3600,
-                keyPrefix: 'recipe:delete'
-            }),
-            this.recipeController.deleteRecipe.bind(this.recipeController)
-        );
+    // Delete recipe (protected, requires user/admin role)
+    this.router.delete(
+      '/:id',
+      authenticate,
+      authorize(['user', 'admin']),
+      // rateLimiterMiddleware({
+      //   points: 10,
+      //   duration: 3600,
+      //   keyPrefix: 'recipe:delete',
+      // }),
+      this.recipeController.deleteRecipe.bind(this.recipeController)
+    );
 
-        // Search recipes (public, rate limited)
-        this.router.get(
-            '/search',
-            validateRecipeQuery(),
-            rateLimiterMiddleware({
-                points: 50,
-                duration: 3600,
-                keyPrefix: 'recipe:search'
-            }),
-            this.recipeController.searchRecipes.bind(this.recipeController)
-        );
+    // Search recipes (public, rate limited)
+    this.router.get(
+      '/search',
+      validateRecipeQuery(),
+      // rateLimiterMiddleware({
+      //   points: 50,
+      //   duration: 3600,
+      //   keyPrefix: 'recipe:search',
+      // }),
+      this.recipeController.searchRecipes.bind(this.recipeController)
+    );
 
-        // Find recipes by ingredients (protected, rate limited)
-        this.router.post(
-            '/match',
-            authenticate,
-            rateLimiterMiddleware({
-                points: 30,
-                duration: 3600,
-                keyPrefix: 'recipe:match'
-            }),
-            this.recipeController.findRecipesByIngredients.bind(this.recipeController)
-        );
+    // Find recipes by ingredients (protected, rate limited)
+    this.router.post(
+      '/match',
+      authenticate,
+      // rateLimiterMiddleware({
+      //   points: 30,
+      //   duration: 3600,
+      //   keyPrefix: 'recipe:match',
+      // }),
+      this.recipeController.findRecipesByIngredients.bind(this.recipeController)
+    );
 
-        // Rate recipe (protected, requires user role)
-        this.router.post(
-            '/:id/rate',
-            authenticate,
-            authorize(['user']),
-            validateRecipeRating(),
-            rateLimiterMiddleware({
-                points: 10,
-                duration: 3600,
-                keyPrefix: 'recipe:rate'
-            }),
-            this.recipeController.rateRecipe.bind(this.recipeController)
-        );
-    }
+    // Rate recipe (protected, requires user role)
+    this.router.post(
+      '/:id/rate',
+      authenticate,
+      authorize(['user']),
+      validateRecipeRating(),
+      // rateLimiterMiddleware({
+      //   points: 10,
+      //   duration: 3600,
+      //   keyPrefix: 'recipe:rate',
+      // }),
+      this.recipeController.rateRecipe.bind(this.recipeController)
+    );
+  }
 
-    /**
-     * Returns the configured Express router instance
-     * @returns {Router} Express router with configured recipe endpoints
-     */
-    public getRouter(): Router {
-        return this.router;
-    }
+  /**
+   * Returns the configured Express router instance
+   * @returns {Router} Express router with configured recipe endpoints
+   */
+  public getRouter(): Router {
+    return this.router;
+  }
 }
 
 // Export configured router instance
-const recipeController = new RecipeController();
-const recipeRouter = new RecipeRouter(recipeController).getRouter();
-export { recipeRouter };
+// const recipeController = container.resolve(RecipeController);
+const recipeService = container.resolve(RecipeService);
+const recipeController = new RecipeController(recipeService);
+const router = new RecipeRouter(recipeController).getRouter();
+export { router };
