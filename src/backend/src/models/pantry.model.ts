@@ -10,42 +10,42 @@
 
 import mongoose, { Schema, Document } from 'mongoose';
 import { Pantry, PantryItem, StorageLocation, PantryStats } from '../interfaces/pantry.interface';
-import { IngredientCategory } from '../interfaces/ingredient.interface';
+import { Ingredient, IngredientCategory } from '../interfaces/ingredient.interface';
 
 // Addresses requirement: Digital Pantry Management - Item tracking
 const PantryItemSchema = new Schema<PantryItem>({
   ingredientId: {
     type: String,
     required: true,
-    ref: 'Ingredient'
+    ref: 'Ingredient',
   },
   quantity: {
     type: Number,
     required: true,
-    min: 0
+    min: 0,
   },
   unit: {
     type: String,
-    required: true
+    required: true,
   },
   location: {
     type: String,
     enum: Object.values(StorageLocation),
-    required: true
+    required: true,
   },
   purchaseDate: {
     type: Date,
     required: true,
-    default: Date.now
+    default: Date.now,
   },
   expirationDate: {
     type: Date,
-    required: true
+    required: true,
   },
   notes: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 });
 
 // Addresses requirement: Digital Pantry Management - Pantry data structure
@@ -53,42 +53,44 @@ const PantrySchema = new Schema<Pantry>({
   userId: {
     type: String,
     required: true,
-    index: true
+    index: true,
   },
   name: {
     type: String,
     required: true,
-    default: 'My Pantry'
+    default: 'My Pantry',
   },
   items: [PantryItemSchema],
-  locations: [{
-    type: String,
-    enum: Object.values(StorageLocation)
-  }],
+  locations: [
+    {
+      type: String,
+      enum: Object.values(StorageLocation),
+    },
+  ],
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   updatedAt: {
     type: Date,
-    default: Date.now
-  }
+    default: Date.now,
+  },
 });
 
 // Update timestamps on save
-PantrySchema.pre('save', function(next) {
+PantrySchema.pre('save', function (next) {
   this.updatedAt = new Date();
   next();
 });
 
 // Addresses requirement: Digital Pantry Management - Expiration tracking
-PantrySchema.methods.getStats = async function(): Promise<PantryStats> {
+PantrySchema.methods.getStats = async function (): Promise<PantryStats> {
   const now = new Date();
-  const expirationThreshold = new Date(now.getTime() + (7 * 24 * 60 * 60 * 1000)); // 7 days
+  const expirationThreshold = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
   const itemsByCategory = new Map<IngredientCategory, number>();
   const itemsByLocation = new Map<StorageLocation, number>();
-  
+
   let expiringItems = 0;
   let lowStockItems = 0;
 
@@ -121,12 +123,12 @@ PantrySchema.methods.getStats = async function(): Promise<PantryStats> {
     expiringItems,
     lowStockItems,
     itemsByCategory,
-    itemsByLocation
+    itemsByLocation,
   };
 };
 
 // Addresses requirement: Inventory Management - Item management
-PantrySchema.methods.addItem = async function(item: PantryItem): Promise<void> {
+PantrySchema.methods.addItem = async function (item: PantryItem): Promise<void> {
   const existingItemIndex = this.items.findIndex(
     (i: PantryItem) => i.ingredientId === item.ingredientId
   );
@@ -138,7 +140,7 @@ PantrySchema.methods.addItem = async function(item: PantryItem): Promise<void> {
       quantity: item.quantity,
       location: item.location,
       expirationDate: item.expirationDate,
-      notes: item.notes
+      notes: item.notes,
     };
   } else {
     // Add new item
@@ -154,10 +156,8 @@ PantrySchema.methods.addItem = async function(item: PantryItem): Promise<void> {
 };
 
 // Addresses requirement: Inventory Management - Item removal
-PantrySchema.methods.removeItem = async function(ingredientId: string): Promise<void> {
-  const itemIndex = this.items.findIndex(
-    (item: PantryItem) => item.ingredientId === ingredientId
-  );
+PantrySchema.methods.removeItem = async function (ingredientId: string): Promise<void> {
+  const itemIndex = this.items.findIndex((item: PantryItem) => item.ingredientId === ingredientId);
 
   if (itemIndex >= 0) {
     this.items.splice(itemIndex, 1);
@@ -166,12 +166,12 @@ PantrySchema.methods.removeItem = async function(ingredientId: string): Promise<
 };
 
 // Addresses requirement: Inventory Management - Quantity updates
-PantrySchema.methods.updateItemQuantity = async function(
+PantrySchema.methods.updateItemQuantity = async function (
   ingredientId: string,
   quantity: number
 ): Promise<void> {
   const item = this.items.find((i: PantryItem) => i.ingredientId === ingredientId);
-  
+
   if (item) {
     item.quantity = Math.max(0, quantity); // Prevent negative quantities
     await this.save();
@@ -179,7 +179,7 @@ PantrySchema.methods.updateItemQuantity = async function(
 };
 
 // Helper method to determine low stock threshold based on ingredient category
-private getLowStockThreshold(item: PantryItem): number {
+const getLowStockThreshold = async (item: PantryItem): Promise<any> => {
   const defaultThreshold = 1;
   const thresholds = {
     [IngredientCategory.PRODUCE]: 2,
@@ -189,16 +189,18 @@ private getLowStockThreshold(item: PantryItem): number {
     [IngredientCategory.SPICES]: 1,
     [IngredientCategory.CONDIMENTS]: 1,
     [IngredientCategory.BEVERAGES]: 1,
-    [IngredientCategory.OTHER]: 1
+    [IngredientCategory.OTHER]: 1,
   };
 
-  const ingredient = await mongoose.model('Ingredient').findById(item.ingredientId);
+  const ingredient: Ingredient | null = await mongoose
+    .model('Ingredient')
+    .findById(item.ingredientId);
   return ingredient ? thresholds[ingredient.category] : defaultThreshold;
-}
+};
 
 // Create indexes for efficient querying
 PantrySchema.index({ userId: 1 });
 PantrySchema.index({ 'items.ingredientId': 1 });
 PantrySchema.index({ 'items.expirationDate': 1 });
 
-export const PantryModel = mongoose.model<Pantry & Document>('Pantry', PantrySchema);
+export const PantryModel = mongoose.model<Pantry>('Pantry', PantrySchema);

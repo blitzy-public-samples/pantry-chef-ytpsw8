@@ -14,10 +14,10 @@ import { Ingredient, IngredientCategory } from './ingredient.interface';
  * Addresses requirement: Digital Pantry Management - Storage location tracking
  */
 export enum StorageLocation {
-    REFRIGERATOR = 'REFRIGERATOR',
-    FREEZER = 'FREEZER',
-    PANTRY = 'PANTRY',
-    SPICE_RACK = 'SPICE_RACK'
+  REFRIGERATOR = 'REFRIGERATOR',
+  FREEZER = 'FREEZER',
+  PANTRY = 'PANTRY',
+  SPICE_RACK = 'SPICE_RACK',
 }
 
 /**
@@ -27,13 +27,13 @@ export enum StorageLocation {
  * - Expiration Tracking - Purchase and expiration dates
  */
 export interface PantryItem {
-    ingredientId: string;
-    quantity: number;
-    unit: string;
-    location: StorageLocation;
-    purchaseDate: Date;
-    expirationDate: Date;
-    notes: string;
+  ingredientId: string;
+  quantity: number;
+  unit: string;
+  location: StorageLocation;
+  purchaseDate: Date;
+  expirationDate: Date;
+  notes: string;
 }
 
 /**
@@ -41,13 +41,17 @@ export interface PantryItem {
  * Addresses requirement: Digital Pantry Management - User pantry management
  */
 export interface Pantry {
-    id: string;
-    userId: string;
-    name: string;
-    items: PantryItem[];
-    locations: StorageLocation[];
-    createdAt: Date;
-    updatedAt: Date;
+  id: string;
+  userId: string;
+  name: string;
+  items: PantryItem[];
+  locations: StorageLocation[];
+  createdAt: Date;
+  updatedAt: Date;
+  getStats: () => Promise<PantryStats>;
+  removeItem: (ingredientId: string) => Promise<void>;
+  addItem: (item: PantryItem) => Promise<void>;
+  updateItemQuantity: (ingredientId: string, quantity: number) => Promise<void>;
 }
 
 /**
@@ -57,9 +61,9 @@ export interface Pantry {
  * - Expiration Tracking - Expiration monitoring
  */
 export interface PantryStats {
-    totalItems: number;
-    expiringItems: number;
-    lowStockItems: number;
-    itemsByCategory: Map<IngredientCategory, number>;
-    itemsByLocation: Map<StorageLocation, number>;
+  totalItems: number;
+  expiringItems: number;
+  lowStockItems: number;
+  itemsByCategory: Map<IngredientCategory, number>;
+  itemsByLocation: Map<StorageLocation, number>;
 }

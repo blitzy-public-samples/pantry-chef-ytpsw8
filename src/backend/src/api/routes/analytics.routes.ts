@@ -1,12 +1,12 @@
 // @ts-check
-import express, { Router, Request, Response, NextFunction } from 'express'; // ^4.18.0
+import { Router, Request, Response, NextFunction } from 'express'; // ^4.18.0
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { validateRequest } from '../middlewares/validation.middleware';
-import { 
-    UserActivityMetrics, 
-    SystemPerformanceMetrics, 
-    RecipeAnalytics, 
-    AnalyticsTimeframe 
+import {
+  UserActivityMetrics,
+  SystemPerformanceMetrics,
+  RecipeAnalytics,
+  AnalyticsTimeframe,
 } from '../../interfaces/analytics.interface';
 
 /*
@@ -23,87 +23,90 @@ HUMAN TASKS:
  * Requirement: Analytics and Reporting - Implementation of analytics microservice endpoints
  */
 function initializeAnalyticsRoutes(): Router {
-    const router = express.Router();
+  const router: Router = Router();
 
-    // User activity metrics endpoint
-    // Requirement: Usage Tracking - Routes for analytics service functionality
-    router.get('/user-activity',
-        authenticate,
-        authorize(['admin']),
-        validateRequest,
-        async (req: Request, res: Response, next: NextFunction) => {
-            try {
-                const { userId, timeframe } = req.query;
-                const metrics: UserActivityMetrics[] = await getUserActivityMetrics(
-                    timeframe as AnalyticsTimeframe,
-                    userId as string
-                );
-                res.json({
-                    success: true,
-                    data: metrics
-                });
-            } catch (error) {
-                next(error);
-            }
-        }
-    );
+  // User activity metrics endpoint
+  // Requirement: Usage Tracking - Routes for analytics service functionality
+  router.get(
+    '/user-activity',
+    authenticate,
+    authorize(['admin']),
+    validateRequest,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { userId, timeframe } = req.query;
+        const metrics: UserActivityMetrics[] = await getUserActivityMetrics(
+          timeframe as AnalyticsTimeframe,
+          userId as string
+        );
+        res.json({
+          success: true,
+          data: metrics,
+        });
+      } catch (error: any) {
+        next(error);
+      }
+    }
+  );
 
-    // System performance metrics endpoint
-    // Requirement: System Metrics - API routes for tracking performance metrics
-    router.get('/system-performance',
-        authenticate,
-        authorize(['admin']),
-        validateRequest,
-        async (req: Request, res: Response, next: NextFunction) => {
-            try {
-                const { timeframe } = req.query;
-                const metrics: SystemPerformanceMetrics[] = await getSystemPerformanceMetrics(
-                    timeframe as AnalyticsTimeframe
-                );
-                
-                // Validate against system performance thresholds
-                validateSystemMetrics(metrics);
+  // System performance metrics endpoint
+  // Requirement: System Metrics - API routes for tracking performance metrics
+  router.get(
+    '/system-performance',
+    authenticate,
+    authorize(['admin']),
+    validateRequest,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { timeframe } = req.query;
+        const metrics: SystemPerformanceMetrics[] = await getSystemPerformanceMetrics(
+          timeframe as AnalyticsTimeframe
+        );
 
-                res.json({
-                    success: true,
-                    data: metrics,
-                    thresholds: {
-                        apiResponseTime: 200, // ms
-                        imageProcessingTime: 3000, // ms
-                        cpuUsage: 70, // %
-                        memoryUsage: 80 // %
-                    }
-                });
-            } catch (error) {
-                next(error);
-            }
-        }
-    );
+        // Validate against system performance thresholds
+        validateSystemMetrics(metrics);
 
-    // Recipe analytics endpoint
-    // Requirement: Analytics and Reporting - Comprehensive system monitoring
-    router.get('/recipe-analytics',
-        authenticate,
-        authorize(['admin']),
-        validateRequest,
-        async (req: Request, res: Response, next: NextFunction) => {
-            try {
-                const { recipeId, timeframe } = req.query;
-                const analytics: RecipeAnalytics[] = await getRecipeAnalytics(
-                    timeframe as AnalyticsTimeframe,
-                    recipeId as string
-                );
-                res.json({
-                    success: true,
-                    data: analytics
-                });
-            } catch (error) {
-                next(error);
-            }
-        }
-    );
+        res.json({
+          success: true,
+          data: metrics,
+          thresholds: {
+            apiResponseTime: 200, // ms
+            imageProcessingTime: 3000, // ms
+            cpuUsage: 70, // %
+            memoryUsage: 80, // %
+          },
+        });
+      } catch (error: any) {
+        next(error);
+      }
+    }
+  );
 
-    return router;
+  // Recipe analytics endpoint
+  // Requirement: Analytics and Reporting - Comprehensive system monitoring
+  router.get(
+    '/recipe-analytics',
+    authenticate,
+    authorize(['admin']),
+    validateRequest,
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const { recipeId, timeframe } = req.query;
+        const analytics: RecipeAnalytics[] = await getRecipeAnalytics(
+          timeframe as AnalyticsTimeframe,
+          recipeId as string
+        );
+        res.json({
+          success: true,
+          data: analytics,
+        });
+      } catch (error: any) {
+        next(error);
+      }
+    }
+  );
+
+  return router;
 }
 
 /**
@@ -111,11 +114,11 @@ function initializeAnalyticsRoutes(): Router {
  * Requirement: Usage Tracking - User engagement metrics
  */
 async function getUserActivityMetrics(
-    timeframe: AnalyticsTimeframe,
-    userId?: string
+  timeframe: AnalyticsTimeframe,
+  userId?: string
 ): Promise<UserActivityMetrics[]> {
-    // Implementation would be handled by analytics service
-    return [] as UserActivityMetrics[];
+  // Implementation would be handled by analytics service
+  return [] as UserActivityMetrics[];
 }
 
 /**
@@ -123,10 +126,10 @@ async function getUserActivityMetrics(
  * Requirement: System Metrics - Performance monitoring
  */
 async function getSystemPerformanceMetrics(
-    timeframe: AnalyticsTimeframe
+  timeframe: AnalyticsTimeframe
 ): Promise<SystemPerformanceMetrics[]> {
-    // Implementation would be handled by analytics service
-    return [] as SystemPerformanceMetrics[];
+  // Implementation would be handled by analytics service
+  return [] as SystemPerformanceMetrics[];
 }
 
 /**
@@ -134,11 +137,11 @@ async function getSystemPerformanceMetrics(
  * Requirement: Analytics and Reporting - Recipe engagement tracking
  */
 async function getRecipeAnalytics(
-    timeframe: AnalyticsTimeframe,
-    recipeId?: string
+  timeframe: AnalyticsTimeframe,
+  recipeId?: string
 ): Promise<RecipeAnalytics[]> {
-    // Implementation would be handled by analytics service
-    return [] as RecipeAnalytics[];
+  // Implementation would be handled by analytics service
+  return [] as RecipeAnalytics[];
 }
 
 /**
@@ -146,21 +149,23 @@ async function getRecipeAnalytics(
  * Requirement: System Metrics - Performance thresholds validation
  */
 function validateSystemMetrics(metrics: SystemPerformanceMetrics[]): void {
-    metrics.forEach(metric => {
-        if (metric.apiResponseTime > 200) {
-            console.warn(`API response time exceeded threshold: ${metric.apiResponseTime}ms`);
-        }
-        if (metric.imageProcessingTime > 3000) {
-            console.warn(`Image processing time exceeded threshold: ${metric.imageProcessingTime}ms`);
-        }
-        if (metric.cpuUsage > 70) {
-            console.warn(`CPU usage exceeded threshold: ${metric.cpuUsage}%`);
-        }
-        if (metric.memoryUsage > 80) {
-            console.warn(`Memory usage exceeded threshold: ${metric.memoryUsage}%`);
-        }
-    });
+  metrics.forEach((metric) => {
+    if (metric.apiResponseTime > 200) {
+      console.warn(`API response time exceeded threshold: ${metric.apiResponseTime}ms`);
+    }
+    if (metric.imageProcessingTime > 3000) {
+      console.warn(`Image processing time exceeded threshold: ${metric.imageProcessingTime}ms`);
+    }
+    if (metric.cpuUsage > 70) {
+      console.warn(`CPU usage exceeded threshold: ${metric.cpuUsage}%`);
+    }
+    if (metric.memoryUsage > 80) {
+      console.warn(`Memory usage exceeded threshold: ${metric.memoryUsage}%`);
+    }
+  });
 }
 
+const router = initializeAnalyticsRoutes();
+
 // Export configured router
-export default initializeAnalyticsRoutes();
+export { router };

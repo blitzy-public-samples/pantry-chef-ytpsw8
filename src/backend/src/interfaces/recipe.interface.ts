@@ -1,7 +1,5 @@
 // @version mongoose ^6.0.0
 
-import { Ingredient } from '../interfaces/ingredient.interface';
-
 /**
  * HUMAN TASKS:
  * 1. Verify that the recipe difficulty levels align with frontend display requirements
@@ -14,10 +12,10 @@ import { Ingredient } from '../interfaces/ingredient.interface';
  * Addresses requirement: Recipe Management - Smart recipe matching based on available ingredients
  */
 export interface RecipeIngredient {
-    ingredientId: string;
-    quantity: number;
-    unit: string;
-    notes: string;
+  ingredientId: string;
+  quantity: number;
+  unit: string;
+  notes: string;
 }
 
 /**
@@ -25,10 +23,10 @@ export interface RecipeIngredient {
  * Addresses requirement: Recipe Management - Comprehensive recipe instructions
  */
 export interface CookingStep {
-    stepNumber: number;
-    instruction: string;
-    duration: number;  // Duration in minutes
-    imageUrl: string;
+  stepNumber: number;
+  instruction: string;
+  duration: number; // Duration in minutes
+  imageUrl: string;
 }
 
 /**
@@ -36,9 +34,9 @@ export interface CookingStep {
  * Addresses requirement: Recipe Management - User skill level matching
  */
 export enum RecipeDifficulty {
-    EASY = 'EASY',
-    INTERMEDIATE = 'INTERMEDIATE',
-    ADVANCED = 'ADVANCED'
+  EASY = 'EASY',
+  INTERMEDIATE = 'INTERMEDIATE',
+  ADVANCED = 'ADVANCED',
 }
 
 /**
@@ -46,11 +44,11 @@ export enum RecipeDifficulty {
  * Addresses requirement: Basic Nutritional Information - Provides basic nutritional information for recipes
  */
 export interface RecipeNutritionalInfo {
-    servingSize: string;
-    calories: number;
-    protein: number;  // in grams
-    carbohydrates: number;  // in grams
-    fat: number;  // in grams
+  servingSize: string;
+  calories: number;
+  protein: number; // in grams
+  carbohydrates: number; // in grams
+  fat: number; // in grams
 }
 
 /**
@@ -58,10 +56,10 @@ export interface RecipeNutritionalInfo {
  * Addresses requirement: Recipe Sharing - Social recipe sharing and community features
  */
 export interface RecipeRating {
-    userId: string;
-    rating: number;  // Scale of 1-5
-    comment: string;
-    createdAt: Date;
+  userId: string;
+  rating: number; // Scale of 1-5
+  comment: string;
+  createdAt: Date;
 }
 
 /**
@@ -73,36 +71,36 @@ export interface RecipeRating {
  * - Basic Nutritional Information - Nutritional tracking
  */
 export interface Recipe {
-    id: string;
-    name: string;
-    description: string;
-    authorId: string;
-    
-    // Recipe composition
-    ingredients: RecipeIngredient[];
-    instructions: CookingStep[];
-    
-    // Timing information
-    prepTime: number;  // in minutes
-    cookTime: number;  // in minutes
-    servings: number;
-    
-    // Classification
-    difficulty: RecipeDifficulty;
-    cuisine: string;
-    tags: string[];
-    
-    // Media
-    imageUrl: string;
-    
-    // Nutritional data
-    nutritionalInfo: RecipeNutritionalInfo;
-    
-    // Social features
-    ratings: RecipeRating[];
-    averageRating: number;
-    
-    // Metadata
-    createdAt: Date;
-    updatedAt: Date;
+  id: string;
+  name: string;
+  description: string;
+  authorId: string;
+
+  // Recipe composition
+  ingredients: RecipeIngredient[];
+  instructions: CookingStep[];
+
+  // Timing information
+  prepTime: number; // in minutes
+  cookTime: number; // in minutes
+  servings: number;
+
+  // Classification
+  difficulty: RecipeDifficulty;
+  cuisine: string;
+  tags: string[];
+
+  // Media
+  imageUrl: string;
+
+  // Nutritional data
+  nutritionalInfo: RecipeNutritionalInfo;
+
+  // Social features
+  ratings: RecipeRating[];
+  averageRating: number;
+
+  // Metadata
+  createdAt: Date;
+  updatedAt: Date;
 }

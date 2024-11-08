@@ -13,13 +13,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { Recipe } from '../../interfaces/recipe.interface';
 import { RecipeService } from '../../services/recipe.service';
-import { 
-    validateCreateRecipe, 
-    validateUpdateRecipe, 
-    validateRecipeQuery 
+import {
+  validateCreateRecipe,
+  validateUpdateRecipe,
+  validateRecipeQuery,
 } from '../validators/recipe.validator';
 import { errorHandler } from '../middlewares/error.middleware';
 import { logger } from '../../utils/logger';
+import { Order } from '../../services/search.service';
+import { injectable, singleton } from 'tsyringe';
 
 /**
  * Controller handling recipe-related HTTP endpoints with performance optimization
@@ -29,286 +31,266 @@ import { logger } from '../../utils/logger';
  * - Recipe Sharing (1.2 Scope/Core Capabilities)
  * - Performance Metrics (APPENDICES/C. SYSTEM METRICS)
  */
+@singleton()
 export class RecipeController {
-    constructor(private readonly recipeService: RecipeService) {
-        this.validateServiceDependency();
+  constructor(private readonly recipeService: RecipeService) {
+    this.validateServiceDependency();
+  }
+
+  /**
+   * Validates recipe service dependency
+   */
+  private validateServiceDependency(): void {
+    if (!this.recipeService) {
+      throw new Error('RecipeService dependency is required');
     }
+  }
 
-    /**
-     * Validates recipe service dependency
-     */
-    private validateServiceDependency(): void {
-        if (!this.recipeService) {
-            throw new Error('RecipeService dependency is required');
-        }
+  /**
+   * Creates a new recipe with validation
+   * Requirement: Recipe Management - Smart recipe matching based on available ingredients
+   */
+  // @validateCreateRecipe()
+  public async createRecipe(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const startTime = Date.now();
+      const recipeData: Recipe = req.body;
+
+      // Create recipe through service layer
+      const createdRecipe = await this.recipeService.createRecipe(recipeData);
+
+      // Log performance metrics
+      const duration = Date.now() - startTime;
+      logger.info('Recipe created', {
+        recipeId: createdRecipe.id,
+        duration,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Return created recipe
+      res.status(201).json({
+        success: true,
+        data: createdRecipe,
+        metadata: {
+          responseTime: duration,
+        },
+      });
+    } catch (error: any) {
+      next(error);
     }
+  }
 
-    /**
-     * Creates a new recipe with validation
-     * Requirement: Recipe Management - Smart recipe matching based on available ingredients
-     */
-    @validateCreateRecipe()
-    public async createRecipe(
-        req: Request,
-        res: Response,
-        next: NextFunction
-    ): Promise<void> {
-        try {
-            const startTime = Date.now();
-            const recipeData: Recipe = req.body;
+  /**
+   * Retrieves a recipe by ID with caching
+   * Requirement: Performance Metrics - API response time < 200ms requirement
+   */
+  public async getRecipe(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const startTime = Date.now();
+      const { id } = req.params;
 
-            // Create recipe through service layer
-            const createdRecipe = await this.recipeService.createRecipe(recipeData);
+      // Get recipe with caching
+      const recipe = await this.recipeService.getRecipeById(id);
 
-            // Log performance metrics
-            const duration = Date.now() - startTime;
-            logger.info('Recipe created', {
-                recipeId: createdRecipe.id,
-                duration,
-                timestamp: new Date().toISOString()
-            });
+      if (!recipe) {
+        res.status(404).json({
+          success: false,
+          error: {
+            message: 'Recipe not found',
+            code: 'RECIPE_NOT_FOUND',
+          },
+        });
+        return;
+      }
 
-            // Return created recipe
-            res.status(201).json({
-                success: true,
-                data: createdRecipe,
-                metadata: {
-                    responseTime: duration
-                }
-            });
-        } catch (error) {
-            next(error);
-        }
+      // Log performance metrics
+      const duration = Date.now() - startTime;
+      logger.info('Recipe retrieved', {
+        recipeId: id,
+        duration,
+        timestamp: new Date().toISOString(),
+      });
+
+      res.status(200).json({
+        success: true,
+        data: recipe,
+        metadata: {
+          responseTime: duration,
+        },
+      });
+    } catch (error: any) {
+      next(error);
     }
+  }
 
-    /**
-     * Retrieves a recipe by ID with caching
-     * Requirement: Performance Metrics - API response time < 200ms requirement
-     */
-    public async getRecipe(
-        req: Request,
-        res: Response,
-        next: NextFunction
-    ): Promise<void> {
-        try {
-            const startTime = Date.now();
-            const { id } = req.params;
+  /**
+   * Updates an existing recipe with validation
+   * Requirement: Recipe Management - Recipe data management
+   */
+  // @validateUpdateRecipe()
+  public async updateRecipe(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const startTime = Date.now();
+      const { id } = req.params;
+      const updateData: Partial<Recipe> = req.body;
 
-            // Get recipe with caching
-            const recipe = await this.recipeService.getRecipeById(id);
-            
-            if (!recipe) {
-                res.status(404).json({
-                    success: false,
-                    error: {
-                        message: 'Recipe not found',
-                        code: 'RECIPE_NOT_FOUND'
-                    }
-                });
-                return;
-            }
+      // Update recipe through service layer
+      const updatedRecipe = await this.recipeService.updateRecipe(id, updateData);
 
-            // Log performance metrics
-            const duration = Date.now() - startTime;
-            logger.info('Recipe retrieved', {
-                recipeId: id,
-                duration,
-                timestamp: new Date().toISOString()
-            });
+      // Log performance metrics
+      const duration = Date.now() - startTime;
+      logger.info('Recipe updated', {
+        recipeId: id,
+        duration,
+        timestamp: new Date().toISOString(),
+      });
 
-            res.status(200).json({
-                success: true,
-                data: recipe,
-                metadata: {
-                    responseTime: duration
-                }
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        data: updatedRecipe,
+        metadata: {
+          responseTime: duration,
+        },
+      });
+    } catch (error: any) {
+      next(error);
     }
+  }
 
-    /**
-     * Updates an existing recipe with validation
-     * Requirement: Recipe Management - Recipe data management
-     */
-    @validateUpdateRecipe()
-    public async updateRecipe(
-        req: Request,
-        res: Response,
-        next: NextFunction
-    ): Promise<void> {
-        try {
-            const startTime = Date.now();
-            const { id } = req.params;
-            const updateData: Partial<Recipe> = req.body;
+  /**
+   * Deletes a recipe with cleanup
+   * Requirement: Recipe Management - Recipe data management
+   */
+  public async deleteRecipe(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const startTime = Date.now();
+      const { id } = req.params;
 
-            // Update recipe through service layer
-            const updatedRecipe = await this.recipeService.updateRecipe(id, updateData);
+      // Delete recipe through service layer
+      await this.recipeService.deleteRecipe(id);
 
-            // Log performance metrics
-            const duration = Date.now() - startTime;
-            logger.info('Recipe updated', {
-                recipeId: id,
-                duration,
-                timestamp: new Date().toISOString()
-            });
+      // Log performance metrics
+      const duration = Date.now() - startTime;
+      logger.info('Recipe deleted', {
+        recipeId: id,
+        duration,
+        timestamp: new Date().toISOString(),
+      });
 
-            res.status(200).json({
-                success: true,
-                data: updatedRecipe,
-                metadata: {
-                    responseTime: duration
-                }
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(204).send();
+    } catch (error: any) {
+      next(error);
     }
+  }
 
-    /**
-     * Deletes a recipe with cleanup
-     * Requirement: Recipe Management - Recipe data management
-     */
-    public async deleteRecipe(
-        req: Request,
-        res: Response,
-        next: NextFunction
-    ): Promise<void> {
-        try {
-            const startTime = Date.now();
-            const { id } = req.params;
+  /**
+   * Searches recipes with filters and pagination
+   * Requirement: Recipe Discovery - Recipe and ingredient search functionality
+   */
+  // @validateRecipeQuery()
+  public async searchRecipes(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const startTime = Date.now();
+      const {
+        search = '',
+        cuisine,
+        difficulty,
+        prepTimeMax,
+        cookTimeMax,
+        page = 1,
+        limit = 20,
+        sort = 'rating',
+        order = 'desc',
+      } = req.query;
 
-            // Delete recipe through service layer
-            await this.recipeService.deleteRecipe(id);
+      // Search recipes through service layer
+      const searchResults = await this.recipeService.searchRecipes(search as string, {
+        cuisine: cuisine as string[],
+        difficulty: difficulty as string[],
+        prepTimeMax: parseInt(prepTimeMax as string),
+        cookTimeMax: parseInt(cookTimeMax as string),
+        page: parseInt(page as string),
+        limit: parseInt(limit as string),
+        sort: sort as string,
+        order: order as Order,
+      });
 
-            // Log performance metrics
-            const duration = Date.now() - startTime;
-            logger.info('Recipe deleted', {
-                recipeId: id,
-                duration,
-                timestamp: new Date().toISOString()
-            });
+      // Log performance metrics
+      const duration = Date.now() - startTime;
+      logger.info('Recipe search completed', {
+        query: search,
+        resultCount: searchResults.total,
+        duration,
+        timestamp: new Date().toISOString(),
+      });
 
-            res.status(204).send();
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        data: searchResults.items,
+        metadata: {
+          total: searchResults.total,
+          page: parseInt(page as string),
+          limit: parseInt(limit as string),
+          responseTime: duration,
+        },
+      });
+    } catch (error: any) {
+      next(error);
     }
+  }
 
-    /**
-     * Searches recipes with filters and pagination
-     * Requirement: Recipe Discovery - Recipe and ingredient search functionality
-     */
-    @validateRecipeQuery()
-    public async searchRecipes(
-        req: Request,
-        res: Response,
-        next: NextFunction
-    ): Promise<void> {
-        try {
-            const startTime = Date.now();
-            const { 
-                search = '',
-                cuisine,
-                difficulty,
-                prepTimeMax,
-                cookTimeMax,
-                page = 1,
-                limit = 20,
-                sort = 'rating',
-                order = 'desc'
-            } = req.query;
+  /**
+   * Finds recipes matching available ingredients
+   * Requirement: Recipe Management - Smart recipe matching based on available ingredients
+   */
+  public async findRecipesByIngredients(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const startTime = Date.now();
+      const { ingredients } = req.query;
 
-            // Search recipes through service layer
-            const searchResults = await this.recipeService.searchRecipes(
-                search as string,
-                {
-                    cuisine: cuisine as string,
-                    difficulty: difficulty as string,
-                    prepTimeMax: prepTimeMax ? parseInt(prepTimeMax as string) : undefined,
-                    cookTimeMax: cookTimeMax ? parseInt(cookTimeMax as string) : undefined,
-                    page: parseInt(page as string),
-                    limit: parseInt(limit as string),
-                    sort: sort as string,
-                    order: order as 'asc' | 'desc'
-                }
-            );
+      if (!ingredients) {
+        res.status(400).json({
+          success: false,
+          error: {
+            message: 'Ingredients list is required',
+            code: 'MISSING_INGREDIENTS',
+          },
+        });
+        return;
+      }
 
-            // Log performance metrics
-            const duration = Date.now() - startTime;
-            logger.info('Recipe search completed', {
-                query: search,
-                resultCount: searchResults.total,
-                duration,
-                timestamp: new Date().toISOString()
-            });
+      // Convert comma-separated ingredient IDs to array
+      const ingredientIds = (ingredients as string).split(',');
 
-            res.status(200).json({
-                success: true,
-                data: searchResults.items,
-                metadata: {
-                    total: searchResults.total,
-                    page: parseInt(page as string),
-                    limit: parseInt(limit as string),
-                    responseTime: duration
-                }
-            });
-        } catch (error) {
-            next(error);
-        }
+      // Find matching recipes through service layer
+      const matchingRecipes = await this.recipeService.findRecipesByIngredients(ingredientIds);
+
+      // Log performance metrics
+      const duration = Date.now() - startTime;
+      logger.info('Recipe matching completed', {
+        ingredientCount: ingredientIds.length,
+        matchCount: matchingRecipes.length,
+        duration,
+        timestamp: new Date().toISOString(),
+      });
+
+      res.status(200).json({
+        success: true,
+        data: matchingRecipes,
+        metadata: {
+          ingredientCount: ingredientIds.length,
+          matchCount: matchingRecipes.length,
+          responseTime: duration,
+        },
+      });
+    } catch (error: any) {
+      next(error);
     }
+  }
 
-    /**
-     * Finds recipes matching available ingredients
-     * Requirement: Recipe Management - Smart recipe matching based on available ingredients
-     */
-    public async findRecipesByIngredients(
-        req: Request,
-        res: Response,
-        next: NextFunction
-    ): Promise<void> {
-        try {
-            const startTime = Date.now();
-            const { ingredients } = req.query;
-
-            if (!ingredients) {
-                res.status(400).json({
-                    success: false,
-                    error: {
-                        message: 'Ingredients list is required',
-                        code: 'MISSING_INGREDIENTS'
-                    }
-                });
-                return;
-            }
-
-            // Convert comma-separated ingredient IDs to array
-            const ingredientIds = (ingredients as string).split(',');
-
-            // Find matching recipes through service layer
-            const matchingRecipes = await this.recipeService.findRecipesByIngredients(ingredientIds);
-
-            // Log performance metrics
-            const duration = Date.now() - startTime;
-            logger.info('Recipe matching completed', {
-                ingredientCount: ingredientIds.length,
-                matchCount: matchingRecipes.length,
-                duration,
-                timestamp: new Date().toISOString()
-            });
-
-            res.status(200).json({
-                success: true,
-                data: matchingRecipes,
-                metadata: {
-                    ingredientCount: ingredientIds.length,
-                    matchCount: matchingRecipes.length,
-                    responseTime: duration
-                }
-            });
-        } catch (error) {
-            next(error);
-        }
-    }
+  public async rateRecipe() {}
 }

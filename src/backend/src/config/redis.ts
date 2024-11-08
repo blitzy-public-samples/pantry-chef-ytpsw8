@@ -1,7 +1,8 @@
-import Redis from 'ioredis'; // ^5.0.0
+import Redis, { Cluster, ClusterOptions } from 'ioredis'; // ^5.0.0
 import dotenv from 'dotenv'; // ^16.0.0
 import { logError } from '../utils/logger';
 import { CACHE_CONSTANTS } from '../utils/constants';
+import configs from './configs';
 
 // HUMAN TASKS:
 // 1. Set up Redis credentials in environment variables:
@@ -16,50 +17,46 @@ import { CACHE_CONSTANTS } from '../utils/constants';
 // 5. Set up Redis backup strategy
 // 6. Configure network security groups for Redis access
 
-// Load environment variables
-dotenv.config();
-
-// Environment variables with defaults
-const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
-const REDIS_PORT = parseInt(process.env.REDIS_PORT) || 6379;
-const REDIS_PASSWORD = process.env.REDIS_PASSWORD;
-const REDIS_DB = parseInt(process.env.REDIS_DB) || 0;
-const REDIS_CLUSTER_MODE = process.env.REDIS_CLUSTER_MODE === 'true';
+const REDIS_HOST = configs.providers.redis.host;
+const REDIS_PORT = configs.providers.redis.port;
+const REDIS_PASSWORD = configs.providers.redis.password;
+const REDIS_DB = configs.providers.redis.db;
+const REDIS_CLUSTER_MODE = configs.providers.redis.clusterMode;
 
 // Requirement: Cache Layer - Redis configuration object with connection parameters
 export const redisConfig = {
-    host: REDIS_HOST,
-    port: REDIS_PORT,
-    password: REDIS_PASSWORD,
-    db: REDIS_DB,
-    clusterMode: CACHE_CONSTANTS.REDIS_CLUSTER_MODE
+  host: REDIS_HOST,
+  port: REDIS_PORT,
+  password: REDIS_PASSWORD,
+  db: REDIS_DB,
+  clusterMode: CACHE_CONSTANTS.REDIS_CLUSTER_MODE,
 };
 
 // Requirement: High Availability - Redis cluster configuration for high availability
-const clusterOptions = {
-    clusterRetryStrategy: (times: number) => {
-        const delay = Math.min(times * 100, 2000);
-        return delay;
-    },
-    enableReadyCheck: true,
-    maxRedirections: 6,
-    retryDelayOnFailover: 100,
-    retryDelayOnClusterDown: 100,
-    scaleReads: 'slave'
+const clusterOptions: ClusterOptions = {
+  clusterRetryStrategy: (times: number) => {
+    const delay = Math.min(times * 100, 2000);
+    return delay;
+  },
+  enableReadyCheck: true,
+  maxRedirections: 6,
+  retryDelayOnFailover: 100,
+  retryDelayOnClusterDown: 100,
+  scaleReads: 'slave',
 };
 
 // Requirement: Performance Optimization - Redis client configuration with retry strategy
 const clientOptions = {
-    retryStrategy: (times: number) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-    },
-    enableReadyCheck: true,
-    keepAlive: 10000,
-    connectTimeout: 10000,
-    disconnectTimeout: 2000,
-    maxRetriesPerRequest: 3,
-    enableOfflineQueue: true
+  clusterRetryStrategy: (times: number) => {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+  enableReadyCheck: true,
+  keepAlive: 10000,
+  connectTimeout: 10000,
+  disconnectTimeout: 2000,
+  maxRetriesPerRequest: 3,
+  enableOfflineQueue: true,
 };
 
 /**
@@ -67,63 +64,63 @@ const clientOptions = {
  * Requirement: Cache Layer - Redis cache configuration for session management
  */
 export const createRedisClient = (): Redis => {
-    try {
-        let client: Redis;
+  try {
+    let client: Redis | Cluster;
 
-        // Requirement: High Availability - Redis cluster configuration with automatic failover
-        if (CACHE_CONSTANTS.REDIS_CLUSTER_MODE) {
-            client = new Redis.Cluster(
-                [
-                    {
-                        host: REDIS_HOST,
-                        port: REDIS_PORT
-                    }
-                ],
-                {
-                    ...clusterOptions,
-                    redisOptions: {
-                        password: REDIS_PASSWORD,
-                        db: REDIS_DB,
-                        ...clientOptions
-                    }
-                }
-            );
-        } else {
-            // Requirement: Performance Optimization - Standalone Redis configuration
-            client = new Redis({
-                host: REDIS_HOST,
-                port: REDIS_PORT,
-                password: REDIS_PASSWORD,
-                db: REDIS_DB,
-                ...clientOptions
-            });
+    // Requirement: High Availability - Redis cluster configuration with automatic failover
+    if (CACHE_CONSTANTS.REDIS_CLUSTER_MODE) {
+      client = new Redis.Cluster(
+        [
+          {
+            host: REDIS_HOST,
+            port: REDIS_PORT,
+          },
+        ],
+        {
+          ...clusterOptions,
+          redisOptions: {
+            password: REDIS_PASSWORD,
+            db: REDIS_DB,
+            ...clientOptions,
+          },
         }
-
-        // Requirement: High Availability - Set up connection event handlers
-        client.on('connect', () => {
-            console.info('Redis client connected successfully');
-        });
-
-        client.on('error', (error: Error) => {
-            logError(error, 'Redis connection error');
-        });
-
-        client.on('close', () => {
-            console.warn('Redis connection closed');
-        });
-
-        client.on('reconnecting', () => {
-            console.info('Redis client reconnecting');
-        });
-
-        // Requirement: Performance Optimization - Set default key prefix for cache management
-        client.options.keyPrefix = `${process.env.NODE_ENV}:`;
-
-        return client;
-    } catch (error) {
-        logError(error as Error, 'Redis client creation failed');
-        throw error;
+      );
+    } else {
+      // Requirement: Performance Optimization - Standalone Redis configuration
+      client = new Redis({
+        host: REDIS_HOST,
+        port: REDIS_PORT,
+        password: REDIS_PASSWORD,
+        db: REDIS_DB,
+        ...clientOptions,
+      });
     }
+
+    // Requirement: High Availability - Set up connection event handlers
+    client.on('connect', () => {
+      console.info('Redis client connected successfully');
+    });
+
+    client.on('error', (error: Error) => {
+      logError(error, 'Redis connection error');
+    });
+
+    client.on('close', () => {
+      console.warn('Redis connection closed');
+    });
+
+    client.on('reconnecting', () => {
+      console.info('Redis client reconnecting');
+    });
+
+    // Requirement: Performance Optimization - Set default key prefix for cache management
+    client.options.keyPrefix = `${process.env.NODE_ENV}:`;
+
+    return client as Redis;
+  } catch (error) {
+    logError(error as Error, 'Redis client creation failed');
+    throw error;
+  }
 };
 
 /**
@@ -131,31 +128,31 @@ export const createRedisClient = (): Redis => {
  * Requirement: Cache Layer - Redis configuration retrieval
  */
 export const getRedisConfig = (): Record<string, any> => {
-    try {
-        // Requirement: Performance Optimization - Redis configuration with cache policies
-        const config = {
-            ...redisConfig,
-            defaultTTL: CACHE_CONSTANTS.DEFAULT_TTL,
-            keyPrefixes: {
-                recipe: CACHE_CONSTANTS.RECIPE_CACHE_PREFIX,
-                user: CACHE_CONSTANTS.USER_CACHE_PREFIX
-            },
-            cluster: {
-                enabled: CACHE_CONSTANTS.REDIS_CLUSTER_MODE,
-                options: clusterOptions
-            },
-            client: clientOptions,
-            // Requirement: High Availability - Redis high availability settings
-            highAvailability: {
-                autoReconnect: true,
-                maxReconnectAttempts: 10,
-                reconnectInterval: 1000
-            }
-        };
+  try {
+    // Requirement: Performance Optimization - Redis configuration with cache policies
+    const config = {
+      ...redisConfig,
+      defaultTTL: CACHE_CONSTANTS.DEFAULT_TTL,
+      keyPrefixes: {
+        recipe: CACHE_CONSTANTS.RECIPE_CACHE_PREFIX,
+        user: CACHE_CONSTANTS.USER_CACHE_PREFIX,
+      },
+      cluster: {
+        enabled: CACHE_CONSTANTS.REDIS_CLUSTER_MODE,
+        options: clusterOptions,
+      },
+      client: clientOptions,
+      // Requirement: High Availability - Redis high availability settings
+      highAvailability: {
+        autoReconnect: true,
+        maxReconnectAttempts: 10,
+        reconnectInterval: 1000,
+      },
+    };
 
-        return config;
-    } catch (error) {
-        logError(error as Error, 'Redis configuration retrieval failed');
-        throw error;
-    }
+    return config;
+  } catch (error) {
+    logError(error as Error, 'Redis configuration retrieval failed');
+    throw error;
+  }
 };

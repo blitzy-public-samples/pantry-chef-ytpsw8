@@ -2,10 +2,13 @@
 // @version http-status ^1.5.0
 
 import { Request, Response, NextFunction } from 'express';
-import httpStatus from 'http-status';
-import { AuthService } from '../../services/auth.service';
-import { validateLoginRequest, validateSignupRequest, validatePasswordResetRequest } from '../validators/auth.validator';
-import { User } from '../../interfaces/user.interface';
+import { AuthService, RegisterData } from '../../services/auth.service';
+import {
+  validateLoginRequest,
+  validateSignupRequest,
+  validatePasswordResetRequest,
+} from '../validators/auth.validator';
+import { HTTP_STATUS } from '../../utils/constants';
 
 /**
  * HUMAN TASKS:
@@ -25,141 +28,141 @@ import { User } from '../../interfaces/user.interface';
  * - Data Protection (9.2.1): Secure handling of user credentials
  */
 export class AuthController {
-    private authService: AuthService;
+  private authService: AuthService;
 
-    constructor(authService: AuthService) {
-        this.authService = authService;
+  constructor(authService: AuthService) {
+    this.authService = authService;
+  }
+
+  /**
+   * Handles user login requests with email and password validation
+   * Requirements addressed:
+   * - User Authentication: Secure login process
+   * - Security Protocols: Token-based authentication
+   */
+  public login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // Apply login request validation
+      await validateLoginRequest(req, res, next);
+
+      const { email, password } = req.body;
+
+      // Authenticate user and generate tokens
+      const tokens = await this.authService.login({ email, password });
+
+      // Return successful authentication response
+      res.status(HTTP_STATUS.OK).json({
+        status: 'success',
+        data: {
+          ...tokens,
+          type: 'Bearer',
+        },
+      });
+    } catch (error: any) {
+      next(error);
     }
+  };
 
-    /**
-     * Handles user login requests with email and password validation
-     * Requirements addressed:
-     * - User Authentication: Secure login process
-     * - Security Protocols: Token-based authentication
-     */
-    public login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        try {
-            // Apply login request validation
-            await validateLoginRequest(req, res, next);
+  /**
+   * Handles new user registration with comprehensive profile validation
+   * Requirements addressed:
+   * - User Authentication: Secure registration process
+   * - Data Protection: Secure handling of user data
+   */
+  public register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // Apply registration request validation
+      await validateSignupRequest(req, res, next);
 
-            const { email, password } = req.body;
+      const userData: RegisterData = {
+        email: req.body.email,
+        password: req.body.password,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        preferences: req.body.preferences,
+        // dietaryRestrictions: req.body.dietaryRestrictions,
+      };
 
-            // Authenticate user and generate tokens
-            const tokens = await this.authService.login({ email, password });
+      // Create new user account
+      const createdUser = await this.authService.register(userData);
 
-            // Return successful authentication response
-            res.status(httpStatus.OK).json({
-                status: 'success',
-                data: {
-                    ...tokens,
-                    type: 'Bearer'
-                }
-            });
-        } catch (error) {
-            next(error);
-        }
-    };
+      // Return successful registration response
+      res.status(HTTP_STATUS.CREATED).json({
+        status: 'success',
+        data: {
+          user: createdUser,
+        },
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
 
-    /**
-     * Handles new user registration with comprehensive profile validation
-     * Requirements addressed:
-     * - User Authentication: Secure registration process
-     * - Data Protection: Secure handling of user data
-     */
-    public register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        try {
-            // Apply registration request validation
-            await validateSignupRequest(req, res, next);
+  /**
+   * Handles token refresh requests with JWT validation
+   * Requirements addressed:
+   * - Security Protocols: Token refresh mechanism
+   * - Data Protection: Secure token handling
+   */
+  public refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const refreshToken = req.headers.authorization?.split(' ')[1];
 
-            const userData: Partial<User> = {
-                email: req.body.email,
-                password: req.body.password,
-                firstName: req.body.firstName,
-                lastName: req.body.lastName,
-                preferences: req.body.preferences,
-                dietaryRestrictions: req.body.dietaryRestrictions
-            };
+      if (!refreshToken) {
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          status: 'error',
+          message: 'Refresh token is required',
+        });
+        return;
+      }
 
-            // Create new user account
-            const createdUser = await this.authService.register(userData);
+      // Generate new token pair
+      const tokens = await this.authService.refreshToken(refreshToken);
 
-            // Return successful registration response
-            res.status(httpStatus.CREATED).json({
-                status: 'success',
-                data: {
-                    user: createdUser
-                }
-            });
-        } catch (error) {
-            next(error);
-        }
-    };
+      // Return new tokens
+      res.status(HTTP_STATUS.OK).json({
+        status: 'success',
+        data: {
+          ...tokens,
+          type: 'Bearer',
+        },
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
 
-    /**
-     * Handles token refresh requests with JWT validation
-     * Requirements addressed:
-     * - Security Protocols: Token refresh mechanism
-     * - Data Protection: Secure token handling
-     */
-    public refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        try {
-            const refreshToken = req.headers.authorization?.split(' ')[1];
+  /**
+   * Handles password reset requests with email validation
+   * Requirements addressed:
+   * - User Authentication: Secure password reset
+   * - Data Protection: Secure email handling
+   */
+  public resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // Apply password reset request validation
+      await validatePasswordResetRequest(req, res, next);
 
-            if (!refreshToken) {
-                res.status(httpStatus.UNAUTHORIZED).json({
-                    status: 'error',
-                    message: 'Refresh token is required'
-                });
-                return;
-            }
+      const { email } = req.body;
 
-            // Generate new token pair
-            const tokens = await this.authService.refreshToken(refreshToken);
+      // Verify token signature
+      const isValid = await this.authService.verifyToken(email);
 
-            // Return new tokens
-            res.status(httpStatus.OK).json({
-                status: 'success',
-                data: {
-                    ...tokens,
-                    type: 'Bearer'
-                }
-            });
-        } catch (error) {
-            next(error);
-        }
-    };
+      if (!isValid) {
+        res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          status: 'error',
+          message: 'Invalid or expired token',
+        });
+        return;
+      }
 
-    /**
-     * Handles password reset requests with email validation
-     * Requirements addressed:
-     * - User Authentication: Secure password reset
-     * - Data Protection: Secure email handling
-     */
-    public resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-        try {
-            // Apply password reset request validation
-            await validatePasswordResetRequest(req, res, next);
-
-            const { email } = req.body;
-
-            // Verify token signature
-            const isValid = await this.authService.verifyToken(email);
-
-            if (!isValid) {
-                res.status(httpStatus.UNAUTHORIZED).json({
-                    status: 'error',
-                    message: 'Invalid or expired token'
-                });
-                return;
-            }
-
-            // Return success response
-            res.status(httpStatus.OK).json({
-                status: 'success',
-                message: 'Password reset instructions sent to email'
-            });
-        } catch (error) {
-            next(error);
-        }
-    };
+      // Return success response
+      res.status(HTTP_STATUS.OK).json({
+        status: 'success',
+        message: 'Password reset instructions sent to email',
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  };
 }

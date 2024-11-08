@@ -3,7 +3,14 @@
 
 import mongoose, { Schema, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
-import { User, Theme, MeasurementSystem, SkillLevel, DietaryRestriction, NotificationSettings } from '../interfaces/user.interface';
+import {
+  User,
+  Theme,
+  MeasurementSystem,
+  SkillLevel,
+  DietaryRestriction,
+  NotificationSettings,
+} from '../interfaces/user.interface';
 
 /**
  * HUMAN TASKS:
@@ -15,7 +22,7 @@ import { User, Theme, MeasurementSystem, SkillLevel, DietaryRestriction, Notific
  */
 
 // Addresses requirement: User Authentication - Secure password handling
-const hashPassword = async function(this: any, next: Function): Promise<void> {
+const hashPassword = async function (this: any, next: Function): Promise<void> {
   try {
     // Only hash the password if it has been modified or is new
     if (!this.isModified('passwordHash')) {
@@ -27,143 +34,152 @@ const hashPassword = async function(this: any, next: Function): Promise<void> {
     const salt = await bcrypt.genSalt(10);
     this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
     next();
-  } catch (error) {
+  } catch (error: any) {
     next(error);
   }
 };
 
-// Addresses requirement: User Authentication - Password verification
-const comparePassword = async function(this: any, candidatePassword: string): Promise<boolean> {
-  try {
-    // Compare provided password with stored hash
-    return await bcrypt.compare(candidatePassword, this.passwordHash);
-  } catch (error) {
-    throw new Error('Password comparison failed');
-  }
-};
+// // Addresses requirement: User Authentication - Password verification
+// const comparePassword = async function (this: any, candidatePassword: string): Promise<boolean> {
+//   try {
+//     // Compare provided password with stored hash
+//     return await bcrypt.compare(candidatePassword, this.passwordHash);
+//   } catch (error: any) {
+//     throw new Error('Password comparison failed');
+//   }
+// };
 
 // Addresses requirement: User Profile Management - Comprehensive user data structure
-const UserSchema = new Schema<User>({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true,
-    lowercase: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email address']
-  },
-  passwordHash: {
-    type: String,
-    required: true,
-    minlength: 8
-  },
-  firstName: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  lastName: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  profileImage: {
-    type: String,
-    default: null
-  },
-  // Addresses requirement: User Preferences - Personalized settings
-  preferences: {
-    type: {
-      theme: {
-        type: String,
-        enum: Object.values(Theme),
-        default: Theme.SYSTEM
-      },
-      measurementSystem: {
-        type: String,
-        enum: Object.values(MeasurementSystem),
-        default: MeasurementSystem.METRIC
-      },
-      skillLevel: {
-        type: String,
-        enum: Object.values(SkillLevel),
-        default: SkillLevel.BEGINNER
-      },
-      // Addresses requirement: User Preferences - Notification settings
-      notificationSettings: {
-        type: {
-          expirationAlerts: {
-            type: Boolean,
-            default: true
-          },
-          lowStockAlerts: {
-            type: Boolean,
-            default: true
-          },
-          recipeRecommendations: {
-            type: Boolean,
-            default: true
-          },
-          emailNotifications: {
-            type: Boolean,
-            default: true
-          },
-          pushNotifications: {
-            type: Boolean,
-            default: true
-          }
-        },
-        required: true,
-        default: {
-          expirationAlerts: true,
-          lowStockAlerts: true,
-          recipeRecommendations: true,
-          emailNotifications: true,
-          pushNotifications: true
-        }
-      }
-    },
-    required: true
-  },
-  // Addresses requirement: User Preferences - Dietary restrictions
-  dietaryRestrictions: {
-    type: [{
+const UserSchema = new Schema<User>(
+  {
+    email: {
       type: String,
-      enum: Object.values(DietaryRestriction)
-    }],
-    default: []
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email address'],
+    },
+    passwordHash: {
+      type: String,
+      required: true,
+      minlength: 8,
+    },
+    firstName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    lastName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    profileImage: {
+      type: String,
+      default: null,
+    },
+    // Addresses requirement: User Preferences - Personalized settings
+    preferences: {
+      type: {
+        theme: {
+          type: String,
+          enum: Object.values(Theme),
+          default: Theme.SYSTEM,
+        },
+        measurementSystem: {
+          type: String,
+          enum: Object.values(MeasurementSystem),
+          default: MeasurementSystem.METRIC,
+        },
+        skillLevel: {
+          type: String,
+          enum: Object.values(SkillLevel),
+          default: SkillLevel.BEGINNER,
+        },
+        // Addresses requirement: User Preferences - Notification settings
+        notificationSettings: {
+          type: {
+            expirationAlerts: {
+              type: Boolean,
+              default: true,
+            },
+            lowStockAlerts: {
+              type: Boolean,
+              default: true,
+            },
+            recipeRecommendations: {
+              type: Boolean,
+              default: true,
+            },
+            emailNotifications: {
+              type: Boolean,
+              default: true,
+            },
+            pushNotifications: {
+              type: Boolean,
+              default: true,
+            },
+          },
+          required: true,
+          default: {
+            expirationAlerts: true,
+            lowStockAlerts: true,
+            recipeRecommendations: true,
+            emailNotifications: true,
+            pushNotifications: true,
+          },
+        },
+      },
+      required: true,
+    },
+    // Addresses requirement: User Preferences - Dietary restrictions
+    dietaryRestrictions: {
+      type: [
+        {
+          type: String,
+          enum: Object.values(DietaryRestriction),
+        },
+      ],
+      default: [],
+    },
+    // References to saved recipes
+    savedRecipes: {
+      type: [
+        {
+          type: String,
+          ref: 'Recipe',
+        },
+      ],
+      default: [],
+    },
+    // References to user's pantries
+    pantryIds: {
+      type: [
+        {
+          type: String,
+          ref: 'Pantry',
+        },
+      ],
+      default: [],
+    },
+    lastLogin: {
+      type: Date,
+      default: null,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  // References to saved recipes
-  savedRecipes: {
-    type: [{
-      type: Schema.Types.ObjectId,
-      ref: 'Recipe'
-    }],
-    default: []
-  },
-  // References to user's pantries
-  pantryIds: {
-    type: [{
-      type: Schema.Types.ObjectId,
-      ref: 'Pantry'
-    }],
-    default: []
-  },
-  lastLogin: {
-    type: Date,
-    default: null
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+  {
+    timestamps: true,
   }
-}, {
-  timestamps: true
-});
+);
 
 // Middleware to hash password before saving
 // Addresses requirement: Data Security - Password encryption
@@ -171,7 +187,17 @@ UserSchema.pre('save', hashPassword);
 
 // Instance method to compare passwords
 // Addresses requirement: User Authentication - Secure password verification
-UserSchema.methods.comparePassword = comparePassword;
+UserSchema.methods.comparePassword = async function (
+  this: any,
+  candidatePassword: string
+): Promise<boolean> {
+  try {
+    // Compare provided password with stored hash
+    return await bcrypt.compare(candidatePassword, this.passwordHash);
+  } catch (error: any) {
+    throw new Error('Password comparison failed');
+  }
+};
 
 // Create and export the User model
 const UserModel: Model<User> = mongoose.model<User>('User', UserSchema);

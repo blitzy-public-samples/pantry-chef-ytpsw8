@@ -44,8 +44,5 @@ export const jwtConfig: JWTConfig = {
   refreshExpiresIn: AUTH_CONSTANTS.REFRESH_TOKEN_EXPIRY,
 
   // Restrict allowed algorithms to prevent algorithm switching attacks
-  allowedAlgorithms: ['HS256']
+  allowedAlgorithms: ['HS256'],
 };
-
-// Export the interface for type checking across the application
-export type { JWTConfig };
