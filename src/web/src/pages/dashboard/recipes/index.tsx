@@ -8,10 +8,11 @@
 
 import React, { useEffect, useState, useCallback } from 'react'; // ^18.0.0
 import { useRouter } from 'next/router'; // ^13.0.0
-import MainLayout from '../../components/layout/MainLayout';
-import RecipeGrid from '../../components/recipe/RecipeGrid';
-import useRecipes from '../../hooks/useRecipes';
-import { RecipeFilter } from '../../interfaces/recipe.interface';
+import MainLayout from '../../../components/layout/MainLayout';
+import RecipeGrid from '../../../components/recipe/RecipeGrid';
+import useRecipes from '../../../hooks/useRecipes';
+import { RecipeFilter } from '../../../interfaces/recipe.interface';
+import { APP_ROUTES } from '../../../config/constants';
 
 /**
  * Recipe dashboard page component that implements recipe discovery and management functionality
@@ -49,7 +50,7 @@ const RecipesPage: React.FC = () => {
    * Handles navigation to recipe detail page when a recipe is selected
    */
   const handleRecipeSelect = useCallback((recipeId: string) => {
-    router.push(`/dashboard/recipes/${recipeId}`);
+    router.push(`${APP_ROUTES.RECIPES}/${recipeId}`);
   }, [router]);
 
   /**
@@ -67,6 +68,7 @@ const RecipesPage: React.FC = () => {
    */
   useEffect(() => {
     const fetchRecipesData = async () => {
+
       if (currentFilters.ingredients.length > 0) {
         // Use smart matching when ingredients are selected
         await findMatchingRecipes(currentFilters.ingredients);
@@ -77,10 +79,10 @@ const RecipesPage: React.FC = () => {
     };
 
     fetchRecipesData();
-  }, [currentFilters, currentPage, fetchRecipes, findMatchingRecipes]);
+  }, [currentPage, fetchRecipes, findMatchingRecipes]);
 
   return (
-    <MainLayout>
+    <>
       <div className="container mx-auto px-4 py-6">
         {/* Page Header */}
         <div className="flex justify-between items-center mb-8">
@@ -138,7 +140,7 @@ const RecipesPage: React.FC = () => {
           </div>
         )}
       </div>
-    </MainLayout>
+    </>
   );
 };
 

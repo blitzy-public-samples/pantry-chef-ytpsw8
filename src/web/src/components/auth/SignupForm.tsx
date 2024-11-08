@@ -12,10 +12,10 @@ import classNames from 'classnames'; // ^2.3.1
 
 // Internal imports
 import { SignupCredentials, AuthResponse } from '../../interfaces/auth.interface';
-import { AuthService } from '../../services/auth.service';
 import Input from '../common/Input';
 import Button from '../common/Button';
 import { validateSignupCredentials } from '../../utils/validation';
+import useAuth from '../../hooks/useAuth';
 
 // Requirement: Frontend UI Framework - Material Design implementation
 interface SignupFormProps {
@@ -52,7 +52,8 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess, onError, className }
   });
 
   // Initialize AuthService instance
-  const authService = new AuthService();
+  const { signup } = useAuth();
+
 
   // Watch password field for confirmation validation
   const password = watch('password');
@@ -76,8 +77,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess, onError, className }
         return;
       }
 
-      // Attempt signup through AuthService
-      const response = await authService.signup(data);
+      const response = await signup(data);
       onSuccess(response);
     } catch (error) {
       onError(error as Error);
@@ -88,7 +88,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess, onError, className }
     <form
       onSubmit={handleSubmit(onSubmit)}
       className={classNames(
-        'flex flex-col space-y-4 w-full max-w-md',
+        'flex flex-col space-y-8 w-full max-w-md mx-auto',
         className
       )}
       noValidate
@@ -100,6 +100,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess, onError, className }
         label="First Name"
         placeholder="Enter your first name"
         error={errors.firstName?.message}
+        labelClassName='!bg-background-paper'
         {...register('firstName', {
           required: 'First name is required',
           maxLength: {
@@ -116,6 +117,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess, onError, className }
         label="Last Name"
         placeholder="Enter your last name"
         error={errors.lastName?.message}
+        labelClassName='!bg-background-paper'
         {...register('lastName', {
           required: 'Last name is required',
           maxLength: {
@@ -132,6 +134,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess, onError, className }
         label="Email"
         placeholder="Enter your email address"
         error={errors.email?.message}
+        labelClassName='!bg-background-paper'
         {...register('email', {
           required: 'Email is required',
           pattern: {
@@ -148,6 +151,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess, onError, className }
         label="Password"
         placeholder="Create a password"
         error={errors.password?.message}
+        labelClassName='!bg-background-paper'
         {...register('password', {
           required: 'Password is required',
           minLength: {
@@ -174,6 +178,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSuccess, onError, className }
         label="Confirm Password"
         placeholder="Confirm your password"
         error={errors.confirmPassword?.message}
+        labelClassName='!bg-background-paper'
         {...register('confirmPassword', {
           required: 'Please confirm your password',
           validate: (value) =>

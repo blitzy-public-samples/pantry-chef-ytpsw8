@@ -30,28 +30,17 @@ interface ButtonProps {
 }
 
 /**
- * Default props for the Button component
- */
-const defaultProps: Partial<ButtonProps> = {
-  variant: 'primary',
-  size: 'medium',
-  type: 'button',
-  disabled: false,
-  fullWidth: false,
-  loading: false,
-};
-
-/**
  * Generates class names for the button based on variant, size, and state
  */
 const getButtonClasses = (props: ButtonProps): string => {
   const {
     variant = 'primary',
     size = 'medium',
-    disabled,
-    fullWidth,
-    loading,
+    disabled = false,
+    fullWidth = false,
+    loading = false,
     className,
+    type = 'button',
   } = props;
 
   // Base classes using theme tokens
@@ -64,57 +53,58 @@ const getButtonClasses = (props: ButtonProps): string => {
 
   // Variant-specific classes using palette colors
   const variantClasses = {
+    //https://tailwindcss.com/docs/theme
     primary: [
-      `bg-[${palette.primary[600]}]`,
+      `bg-primary-600`,
       `text-white`,
-      `hover:bg-[${palette.primary[700]}]`,
-      `focus:ring-[${palette.primary[500]}]`,
-      `disabled:bg-[${palette.primary[200]}]`,
+      `hover:bg-primary-700`,
+      `focus:ring-primary-500`,
+      `disabled:bg-primary-200`,
     ],
     secondary: [
-      `bg-[${palette.secondary[600]}]`,
+      `bg-primary-600`,
       `text-white`,
-      `hover:bg-[${palette.secondary[700]}]`,
-      `focus:ring-[${palette.secondary[500]}]`,
-      `disabled:bg-[${palette.secondary[200]}]`,
+      `hover:bg-primary-700`,
+      `focus:ring-primary-500`,
+      `disabled:bg-primary-200`,
     ],
     outline: [
       'bg-transparent',
-      `border-2 border-[${palette.primary[600]}]`,
-      `text-[${palette.primary[600]}]`,
-      `hover:bg-[${palette.primary[50]}]`,
-      `focus:ring-[${palette.primary[500]}]`,
+      `border-2 border-primary-600`,
+      `text-primary-600`,
+      `hover:bg-primary-50`,
+      `focus:ring-primary-500`,
       'disabled:border-gray-200',
-      `disabled:text-[${palette.text.disabled}]`,
+      `disabled:text-text-disabled`,
     ],
     text: [
       'bg-transparent',
-      `text-[${palette.primary[600]}]`,
-      `hover:bg-[${palette.primary[50]}]`,
-      `focus:ring-[${palette.primary[500]}]`,
-      `disabled:text-[${palette.text.disabled}]`,
+      `text-primary-600`,
+      `hover:bg-primary-50`,
+      `focus:ring-primary-500`,
+      `disabled:text-text-disabled`,
     ],
   };
 
   // Size-specific classes using spacing and typography
   const sizeClasses = {
     small: [
-      `px-${spacing[3]}`,
-      `py-${spacing[1]}`,
-      `text-${typography.fontSize.sm}`,
-      `rounded-${borderRadius.md}`,
+      `px-3`,
+      `py-1`,
+      `text-sm`,
+      `rounded-md`,
     ],
     medium: [
-      `px-${spacing[4]}`,
-      `py-${spacing[2]}`,
-      `text-${typography.fontSize.base}`,
-      `rounded-${borderRadius.md}`,
+      `px-4`,
+      `py-2`,
+      `text-base`,
+      `rounded-md`,
     ],
     large: [
-      `px-${spacing[6]}`,
-      `py-${spacing[3]}`,
-      `text-${typography.fontSize.lg}`,
-      `rounded-${borderRadius.lg}`,
+      `px-6`,
+      `py-3`,
+      `text-lg`,
+      `rounded-lg`,
     ],
   };
 
@@ -154,10 +144,10 @@ export const Button: React.FC<ButtonProps> = (props) => {
   return (
     <button
       type={type}
-      className={buttonClasses}
       onClick={onClick}
       disabled={disabled || loading}
       aria-disabled={disabled || loading}
+      className={buttonClasses}
     >
       {loading && (
         <svg
@@ -183,18 +173,16 @@ export const Button: React.FC<ButtonProps> = (props) => {
       )}
 
       {startIcon && !loading && (
-        <span className={`mr-${spacing[2]}`}>{startIcon}</span>
+        <span className={`mr-2`}>{startIcon}</span>
       )}
 
-      <span className={`font-${typography.fontWeight.semibold}`}>{children}</span>
+      <span className={`font-semibold`}>{children}</span>
 
       {endIcon && !loading && (
-        <span className={`ml-${spacing[2]}`}>{endIcon}</span>
+        <span className={`ml-2`}>{endIcon}</span>
       )}
     </button>
   );
 };
-
-Button.defaultProps = defaultProps;
 
 export default Button;

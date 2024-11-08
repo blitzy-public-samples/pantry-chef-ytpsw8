@@ -52,9 +52,10 @@ export const APP_ROUTES = {
   SIGNUP: '/signup',
   DASHBOARD: '/dashboard',
   RECIPES: '/dashboard/recipes',
-  PANTRY: '/dashboard/pantry',
+  PANTRY: '/dashboard/inventory',
   SHOPPING: '/dashboard/shopping',
-  SETTINGS: '/dashboard/settings'
+  SETTINGS: '/dashboard/settings',
+  ANALYTICS: '/dashboard/analytics'
 } as const;
 
 // Global environment flags

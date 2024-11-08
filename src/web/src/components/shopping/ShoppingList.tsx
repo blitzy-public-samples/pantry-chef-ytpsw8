@@ -48,13 +48,13 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
   } = useShoppingList();
 
   // Get current shopping list
-  const currentList = useMemo(() => 
+  const currentList = useMemo(() =>
     shoppingLists.find(list => list.id === listId),
     [shoppingLists, listId]
   );
 
   // Filter items based on showChecked prop
-  const filteredItems = useMemo(() => 
+  const filteredItems = useMemo(() =>
     currentList?.items.filter(item => showChecked || !item.checked) || [],
     [currentList, showChecked]
   );
@@ -130,6 +130,20 @@ export const ShoppingList: React.FC<ShoppingListProps> = ({
         </span>
       ),
     },
+    {
+      key: 'actions',
+      title: 'Actions',
+      render: (_: any, item: ShoppingListItem) => (
+        <div className="flex space-x-2">
+          <button
+            onClick={() => { }} // add edit method
+            className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
+          >
+            Edit
+          </button>
+        </div>
+      )
+    }
   ], [handleItemCheck]);
 
   // Handle error state

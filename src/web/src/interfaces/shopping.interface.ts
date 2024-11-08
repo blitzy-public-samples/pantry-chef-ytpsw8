@@ -35,8 +35,8 @@ export interface ShoppingList {
   id: string;
   name: string;
   items: ShoppingListItem[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   userId: string;
 }
 
@@ -49,6 +49,8 @@ export interface ShoppingListFilter {
   searchTerm: string;
   showCheckedItems: boolean;
   recipeId: string;
+  sortBy: string;
+  sortDirection: string;
 }
 
 /**

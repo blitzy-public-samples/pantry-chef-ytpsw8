@@ -135,11 +135,11 @@ export const InventoryList: React.FC<InventoryListProps> = ({
       render: (value: StorageLocation) => (
         <span className="px-2 py-1 rounded-full text-sm font-medium" style={{
           backgroundColor: value === StorageLocation.REFRIGERATOR ? '#e3f2fd' :
-                          value === StorageLocation.FREEZER ? '#e8f5e9' :
-                          '#fff3e0',
+            value === StorageLocation.FREEZER ? '#e8f5e9' :
+              '#fff3e0',
           color: value === StorageLocation.REFRIGERATOR ? '#1976d2' :
-                 value === StorageLocation.FREEZER ? '#388e3c' :
-                 '#f57c00'
+            value === StorageLocation.FREEZER ? '#388e3c' :
+              '#f57c00'
         }}>
           {value.toLowerCase()}
         </span>
@@ -153,13 +153,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         const date = new Date(value);
         const today = new Date();
         const daysUntilExpiration = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        
+
         return (
-          <span className={`font-medium ${
-            daysUntilExpiration <= 0 ? 'text-red-600' :
+          <span className={`font-medium ${daysUntilExpiration <= 0 ? 'text-red-600' :
             daysUntilExpiration <= 7 ? 'text-orange-600' :
-            'text-gray-600'
-          }`}>
+              'text-gray-600'
+            }`}>
             {formatDate(date)}
           </span>
         );
@@ -203,7 +202,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   }, [items, sortKey, sortDirection]);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm">
+    <div className="bg-white rounded-lg">
+      <h2 className="text-xl font-semibold mb-4">
+        Inventory List
+      </h2>
       <Table
         columns={columns}
         data={sortedItems}

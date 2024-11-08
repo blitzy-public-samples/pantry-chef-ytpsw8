@@ -23,6 +23,7 @@ import FacebookProvider from 'next-auth/providers/facebook';
 // Internal dependencies
 import { AuthService } from '../../../services/auth.service';
 import { LoginCredentials, AuthResponse } from '../../../interfaces/auth.interface';
+import { APP_ROUTES } from '../../../config/constants';
 
 // Initialize auth service
 const authService = new AuthService();
@@ -43,14 +44,14 @@ export default NextAuth({
       id: 'credentials',
       name: 'Email and Password',
       credentials: {
-        email: { 
-          label: 'Email', 
-          type: 'text', 
-          placeholder: 'email@example.com' 
+        email: {
+          label: 'Email',
+          type: 'text',
+          placeholder: 'email@example.com'
         },
-        password: { 
-          label: 'Password', 
-          type: 'password' 
+        password: {
+          label: 'Password',
+          type: 'password'
         }
       },
       // Authorize function for credentials validation
@@ -78,7 +79,7 @@ export default NextAuth({
             id: response.user.id,
             email: response.user.email,
             name: `${response.user.firstName} ${response.user.lastName}`,
-            image: response.user.avatar,
+            // image: response.user.avatar,
             accessToken: response.token,
             refreshToken: response.refreshToken
           };
@@ -123,16 +124,16 @@ export default NextAuth({
   // JWT configuration
   jwt: {
     secret: process.env.JWT_SECRET,
-    signingKey: process.env.JWT_SIGNING_KEY,
-    encryptionKey: process.env.JWT_ENCRYPTION_KEY,
+    // signingKey: process.env.JWT_SIGNING_KEY,
+    // encryptionKey: process.env.JWT_ENCRYPTION_KEY,
     maxAge: 2592000, // 30 days
-    encryption: true,
+    // encryption: true,
   },
 
   // Pages configuration
   pages: {
-    signIn: '/login',
-    error: '/login'
+    signIn: APP_ROUTES.LOGIN,
+    error: APP_ROUTES.LOGIN,
   },
 
   // Callbacks configuration
@@ -140,9 +141,9 @@ export default NextAuth({
     // JWT callback for token customization
     async jwt({ token, user, account }): Promise<JWT> {
       if (user && account) {
-        token.accessToken = user.accessToken;
-        token.refreshToken = user.refreshToken;
-        token.provider = account.provider;
+        // token.accessToken = user.accessToken;
+        // token.refreshToken = user.refreshToken;
+        // token.provider = account.provider;
       }
 
       // Check token expiration and refresh if needed
@@ -162,9 +163,9 @@ export default NextAuth({
     // Session callback for client-side session handling
     async session({ session, token }): Promise<any> {
       if (token) {
-        session.accessToken = token.accessToken;
-        session.refreshToken = token.refreshToken;
-        session.provider = token.provider;
+        // session.accessToken = token.accessToken;
+        // session.refreshToken = token.refreshToken;
+        // session.provider = token.provider;
       }
       return session;
     },
@@ -201,7 +202,7 @@ export default NextAuth({
       options: {
         httpOnly: true,
         sameSite: 'lax',
-        path: '/',
+        path: APP_ROUTES.HOME,
         secure: process.env.NODE_ENV === 'production'
       }
     }

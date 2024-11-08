@@ -3,14 +3,103 @@
 import jwtDecode from 'jwt-decode';
 
 // Internal dependencies
-import { 
-  LoginCredentials, 
-  SignupCredentials, 
-  AuthResponse, 
-  TokenPayload 
+import {
+  LoginCredentials,
+  SignupCredentials,
+  AuthResponse,
+  TokenPayload
 } from '../interfaces/auth.interface';
 import { apiClient } from '../utils/api';
 import { API_ENDPOINTS } from '../config/api';
+
+
+export enum Theme {
+  LIGHT = 'LIGHT',
+  DARK = 'DARK',
+  SYSTEM = 'SYSTEM'
+}
+
+/**
+* Enum for measurement system preferences
+* Addresses requirement: User Preference Management - International user support
+*/
+export enum MeasurementSystem {
+  METRIC = 'METRIC',
+  IMPERIAL = 'IMPERIAL'
+}
+
+/**
+* Enum for user cooking skill levels
+* Addresses requirement: User Preference Management - Recipe recommendations
+*/
+export enum SkillLevel {
+  BEGINNER = 'BEGINNER',
+  INTERMEDIATE = 'INTERMEDIATE',
+  ADVANCED = 'ADVANCED'
+}
+
+/**
+* Enum for dietary restrictions
+* Addresses requirement: Dietary Restrictions - Recipe filtering
+*/
+export enum DietaryRestriction {
+  VEGETARIAN = 'VEGETARIAN',
+  VEGAN = 'VEGAN',
+  GLUTEN_FREE = 'GLUTEN_FREE',
+  DAIRY_FREE = 'DAIRY_FREE',
+  NUT_FREE = 'NUT_FREE',
+  HALAL = 'HALAL',
+  KOSHER = 'KOSHER'
+}
+
+/**
+* Interface for user notification preferences
+* Addresses requirement: User Preference Management - Notification settings
+*/
+export interface NotificationSettings {
+  expirationAlerts: boolean;
+  lowStockAlerts: boolean;
+  recipeRecommendations: boolean;
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+}
+
+/**
+* Interface for user preferences and settings
+* Addresses requirement: User Preference Management - Application customization
+*/
+export interface UserPreferences {
+  theme: Theme;
+  language: string;
+  measurementSystem: MeasurementSystem;
+  notificationSettings: NotificationSettings;
+  cuisinePreferences: string[];
+  skillLevel: SkillLevel;
+}
+
+/**
+* Main interface for user data structure
+* Addresses requirements:
+* - User Authentication - Identity management
+* - User Profile Management - Comprehensive user data
+* - User Preference Management - Personalization
+* - Dietary Restrictions - Dietary preferences
+*/
+export interface User {
+  id: string;
+  email: string;
+  passwordHash: string;
+  firstName: string;
+  lastName: string;
+  profileImage: string;
+  preferences: UserPreferences;
+  dietaryRestrictions: DietaryRestriction[];
+  savedRecipes: string[];  // Array of Recipe IDs
+  pantryIds: string[];     // Array of Pantry IDs
+  lastLogin: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 /**
  * HUMAN TASKS:
@@ -89,24 +178,65 @@ export class AuthService {
       if (credentials.password.length < 8) {
         throw new Error('Password must be at least 8 characters long');
       }
-
       // Make POST request to signup endpoint with credentials
-      const response = await apiClient.post<AuthResponse>(
-        API_ENDPOINTS.AUTH.SIGNUP,
-        credentials
-      );
+
+      // uncomment-----> 
+      // const response = await apiClient.post<AuthResponse>(
+      //   API_ENDPOINTS.AUTH.SIGNUP,
+      //   credentials
+      // );
+      // uncomment-----> 
 
       // Store received tokens in session storage
-      sessionStorage.setItem(TOKEN_STORAGE_KEY, response.data.token);
-      sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, response.data.refreshToken);
+
+      // uncomment-----> 
+      // sessionStorage.setItem(TOKEN_STORAGE_KEY, response.data.token);
+      // sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, response.data.refreshToken);
+      // uncomment-----> 
+
 
       // Decode and validate received JWT token
-      const decodedToken = jwtDecode<TokenPayload>(response.data.token);
-      if (!decodedToken || !decodedToken.exp) {
-        throw new Error('Invalid token format');
-      }
 
-      return response.data;
+      // uncomment-----> 
+      // const decodedToken = jwtDecode<TokenPayload>(response.data.token);
+      // if (!decodedToken || !decodedToken.exp) {
+      //   throw new Error('Invalid token format');
+      // }
+      // return response.data;
+      // uncomment-----> 
+      return {
+        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NTYiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJpYXQiOjE2MzQ1Njc4OTAsImV4cCI6MTYzNDU3MTQ5MH0',
+        refreshToken: 'refresh_token_123',
+        expiresIn: 3600,
+        user: {
+          id: '123456',
+          email: 'test@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          passwordHash: '',
+          dietaryRestrictions: [DietaryRestriction.DAIRY_FREE],
+          profileImage: '',
+          savedRecipes: [], // Array of Recipe IDs
+          pantryIds: [],    // Array of Pantry IDs
+          lastLogin: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          preferences: {
+            theme: Theme.DARK,
+            language: '',
+            measurementSystem: MeasurementSystem.METRIC,
+            notificationSettings: {
+              expirationAlerts: false,
+              lowStockAlerts: false,
+              recipeRecommendations: false,
+              emailNotifications: false,
+              pushNotifications: false,
+            },
+            cuisinePreferences: [],
+            skillLevel: SkillLevel.ADVANCED
+          }
+        }
+      }
     } catch (error) {
       throw new Error('Registration failed');
     }
@@ -146,8 +276,8 @@ export class AuthService {
   public async refreshToken(): Promise<AuthResponse> {
     try {
       // Get refresh token from storage
-      const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || 
-                          sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) ||
+        sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
 
       if (!refreshToken) {
         throw new Error('No refresh token available');

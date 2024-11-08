@@ -21,6 +21,7 @@ interface ListEditorProps {
   initialItem: ShoppingListItem | null;
   onSave: (item: ShoppingListItem) => void;
   onCancel: () => void;
+  listId: string;
 }
 
 /**
@@ -34,7 +35,8 @@ export const ListEditor: React.FC<ListEditorProps> = ({
   className,
   initialItem,
   onSave,
-  onCancel
+  onCancel,
+  listId,
 }) => {
   // Initialize form state with initial item or empty values
   const [formData, setFormData] = useState<Partial<ShoppingListItem>>({
@@ -122,9 +124,9 @@ export const ListEditor: React.FC<ListEditorProps> = ({
       };
 
       if (initialItem) {
-        await updateItem(initialItem.id, itemData);
+        await updateItem(listId, initialItem.id, itemData); // missing list id (1st arg)
       } else {
-        await addItem(itemData.id, itemData);
+        await addItem(listId, itemData);
       }
 
       onSave(itemData);

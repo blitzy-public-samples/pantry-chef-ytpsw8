@@ -14,13 +14,13 @@ import MockAdapter from 'axios-mock-adapter';
 
 // Internal dependencies
 import { analyticsService } from '../../src/services/analytics.service';
-import { 
-  AnalyticsEvent, 
-  AnalyticsEventType, 
-  AnalyticsMetrics, 
-  DateRange 
+import {
+  AnalyticsEvent,
+  AnalyticsEventType,
+  AnalyticsMetrics,
+  DateRange
 } from '../../src/interfaces/analytics.interface';
-import { ANALYTICS_CONFIG } from '../../src/config/constants';
+import { ANALYTICS_CONFIG, APP_ROUTES } from '../../src/config/constants';
 import { apiClient } from '../../src/utils/api';
 
 // Initialize mock adapter for axios
@@ -32,8 +32,8 @@ const mockEvent: AnalyticsEvent = {
   timestamp: new Date(),
   userId: 'test-user-123',
   metadata: {
-    page: '/dashboard',
-    referrer: '/login'
+    page: APP_ROUTES.DASHBOARD,
+    referrer: APP_ROUTES.LOGIN
   }
 };
 
@@ -199,13 +199,13 @@ describe('AnalyticsService', () => {
 
     // Verify events are requeued on error
     expect(apiClient.post).toHaveBeenCalledWith('/analytics/events', expect.any(Object));
-    
+
     // Mock successful retry
     mockApiClient.onPost('/analytics/events').reply(200);
-    
+
     // Advance timers to trigger retry
     jest.advanceTimersByTime(ANALYTICS_CONFIG.FLUSH_INTERVAL);
-    
+
     // Verify successful retry
     expect(apiClient.post).toHaveBeenCalledTimes(2);
   });
@@ -230,7 +230,7 @@ describe('AnalyticsService', () => {
     // Verify flush occurred
     expect(apiClient.post).toHaveBeenCalledWith('/analytics/events', {
       trackingId: ANALYTICS_CONFIG.TRACKING_ID,
-      events: [expect.objectContaining(mockEvent)],
+      events: expect.arrayContaining([mockEvent]),
       timestamp: expect.any(String)
     });
   });

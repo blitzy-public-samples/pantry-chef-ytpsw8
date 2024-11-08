@@ -3,7 +3,6 @@ import { render, fireEvent, waitFor, screen } from '@testing-library/react';
 // @version @testing-library/user-event ^14.0.0
 import userEvent from '@testing-library/user-event';
 // @version @jest/globals ^29.0.0
-import { describe, test, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import React from 'react';
 
 // Components under test
@@ -48,14 +47,14 @@ const invalidCredentials = {
 describe('LoginForm', () => {
   // Requirement: Authentication Flow Testing - Login functionality
   const mockOnSuccess = jest.fn();
-  
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   test('renders login form with required fields', () => {
     render(<LoginForm onSuccess={mockOnSuccess} />);
-    
+
     expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
@@ -63,11 +62,11 @@ describe('LoginForm', () => {
 
   test('validates email field with required and pattern rules', async () => {
     render(<LoginForm onSuccess={mockOnSuccess} />);
-    
+
     const emailInput = screen.getByLabelText(/email address/i);
     await userEvent.type(emailInput, invalidCredentials.email);
     fireEvent.blur(emailInput);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/invalid email address/i)).toBeInTheDocument();
     });
@@ -75,11 +74,11 @@ describe('LoginForm', () => {
 
   test('validates password field with required and minLength rules', async () => {
     render(<LoginForm onSuccess={mockOnSuccess} />);
-    
+
     const passwordInput = screen.getByLabelText(/password/i);
     await userEvent.type(passwordInput, invalidCredentials.password);
     fireEvent.blur(passwordInput);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/must be at least 8 characters/i)).toBeInTheDocument();
     });
@@ -94,11 +93,11 @@ describe('LoginForm', () => {
     }));
 
     render(<LoginForm onSuccess={mockOnSuccess} />);
-    
+
     await userEvent.type(screen.getByLabelText(/email address/i), validCredentials.email);
     await userEvent.type(screen.getByLabelText(/password/i), validCredentials.password);
     await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-    
+
     await waitFor(() => {
       expect(mockOnSuccess).toHaveBeenCalled();
     });
@@ -113,11 +112,11 @@ describe('LoginForm', () => {
     }));
 
     render(<LoginForm onSuccess={mockOnSuccess} />);
-    
+
     await userEvent.type(screen.getByLabelText(/email address/i), invalidCredentials.email);
     await userEvent.type(screen.getByLabelText(/password/i), invalidCredentials.password);
     await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-    
+
     await waitFor(() => {
       expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
     });
@@ -132,9 +131,9 @@ describe('LoginForm', () => {
     }));
 
     render(<LoginForm onSuccess={mockOnSuccess} />);
-    
+
     await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-    
+
     expect(screen.getByText(/signing in/i)).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeDisabled();
   });
@@ -144,14 +143,14 @@ describe('SignupForm', () => {
   // Requirement: Authentication Flow Testing - Signup functionality
   const mockOnSuccess = jest.fn();
   const mockOnError = jest.fn();
-  
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   test('renders signup form with all required fields', () => {
     render(<SignupForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     expect(screen.getByLabelText(/first name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/last name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
@@ -161,10 +160,10 @@ describe('SignupForm', () => {
 
   test('validates email with format checking', async () => {
     render(<SignupForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.type(screen.getByLabelText(/email/i), invalidCredentials.email);
     fireEvent.blur(screen.getByLabelText(/email/i));
-    
+
     await waitFor(() => {
       expect(screen.getByText(/valid email address/i)).toBeInTheDocument();
     });
@@ -172,10 +171,10 @@ describe('SignupForm', () => {
 
   test('validates password with strength requirements', async () => {
     render(<SignupForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.type(screen.getByLabelText(/^password/i), invalidCredentials.password);
     fireEvent.blur(screen.getByLabelText(/^password/i));
-    
+
     await waitFor(() => {
       expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument();
     });
@@ -183,11 +182,11 @@ describe('SignupForm', () => {
 
   test('validates password confirmation matching', async () => {
     render(<SignupForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.type(screen.getByLabelText(/^password/i), validCredentials.password);
     await userEvent.type(screen.getByLabelText(/confirm password/i), invalidCredentials.confirmPassword);
     fireEvent.blur(screen.getByLabelText(/confirm password/i));
-    
+
     await waitFor(() => {
       expect(screen.getByText(/passwords do not match/i)).toBeInTheDocument();
     });
@@ -195,10 +194,10 @@ describe('SignupForm', () => {
 
   test('validates first name and last name fields', async () => {
     render(<SignupForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     const submitButton = screen.getByRole('button', { name: /sign up/i });
     await userEvent.click(submitButton);
-    
+
     await waitFor(() => {
       expect(screen.getByText(/first name is required/i)).toBeInTheDocument();
       expect(screen.getByText(/last name is required/i)).toBeInTheDocument();
@@ -212,15 +211,15 @@ describe('SignupForm', () => {
     }));
 
     render(<SignupForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.type(screen.getByLabelText(/first name/i), validCredentials.firstName);
     await userEvent.type(screen.getByLabelText(/last name/i), validCredentials.lastName);
     await userEvent.type(screen.getByLabelText(/email/i), validCredentials.email);
     await userEvent.type(screen.getByLabelText(/^password/i), validCredentials.password);
     await userEvent.type(screen.getByLabelText(/confirm password/i), validCredentials.confirmPassword);
-    
+
     await userEvent.click(screen.getByRole('button', { name: /sign up/i }));
-    
+
     await waitFor(() => {
       expect(mockOnSuccess).toHaveBeenCalledWith(expect.objectContaining({
         token: 'mock-token',
@@ -236,10 +235,10 @@ describe('SignupForm', () => {
     }));
 
     render(<SignupForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.type(screen.getByLabelText(/email/i), validCredentials.email);
     await userEvent.click(screen.getByRole('button', { name: /sign up/i }));
-    
+
     await waitFor(() => {
       expect(mockOnError).toHaveBeenCalledWith(expect.any(Error));
     });
@@ -252,9 +251,9 @@ describe('SignupForm', () => {
     }));
 
     render(<SignupForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.click(screen.getByRole('button', { name: /sign up/i }));
-    
+
     expect(screen.getByText(/creating account/i)).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeDisabled();
   });
@@ -264,24 +263,24 @@ describe('ForgotPasswordForm', () => {
   // Requirement: Authentication Flow Testing - Password reset functionality
   const mockOnSuccess = jest.fn();
   const mockOnError = jest.fn();
-  
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   test('renders form with email field', () => {
     render(<ForgotPasswordForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /reset password/i })).toBeInTheDocument();
   });
 
   test('validates email with format checking', async () => {
     render(<ForgotPasswordForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.type(screen.getByLabelText(/email address/i), invalidCredentials.email);
     fireEvent.blur(screen.getByLabelText(/email address/i));
-    
+
     await waitFor(() => {
       expect(screen.getByText(/valid email address/i)).toBeInTheDocument();
     });
@@ -294,10 +293,10 @@ describe('ForgotPasswordForm', () => {
     }));
 
     render(<ForgotPasswordForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.type(screen.getByLabelText(/email address/i), validCredentials.email);
     await userEvent.click(screen.getByRole('button', { name: /reset password/i }));
-    
+
     await waitFor(() => {
       expect(mockOnSuccess).toHaveBeenCalledWith(validCredentials.email);
     });
@@ -310,10 +309,10 @@ describe('ForgotPasswordForm', () => {
     }));
 
     render(<ForgotPasswordForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.type(screen.getByLabelText(/email address/i), invalidCredentials.email);
     await userEvent.click(screen.getByRole('button', { name: /reset password/i }));
-    
+
     await waitFor(() => {
       expect(mockOnError).toHaveBeenCalledWith('Email not found');
     });
@@ -326,9 +325,9 @@ describe('ForgotPasswordForm', () => {
     }));
 
     render(<ForgotPasswordForm onSuccess={mockOnSuccess} onError={mockOnError} />);
-    
+
     await userEvent.click(screen.getByRole('button', { name: /reset password/i }));
-    
+
     expect(screen.getByText(/sending/i)).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeDisabled();
   });

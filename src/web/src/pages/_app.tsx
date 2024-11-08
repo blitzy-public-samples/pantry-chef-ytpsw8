@@ -17,6 +17,8 @@ import { store, persistor } from '../store/store';
 
 // Layout and styles
 import MainLayout from '../components/layout/MainLayout';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import '../styles/globals.css';
 
 /**
@@ -37,8 +39,8 @@ const App = ({ Component, pageProps }: AppProps): JSX.Element => {
        * PersistGate delays app rendering until persisted state is retrieved
        * Requirement: State Management - persistence and real-time sync
        */}
-      <PersistGate 
-        loading={null} 
+      <PersistGate
+        loading={null}
         persistor={persistor}
       >
         {/**
@@ -52,6 +54,7 @@ const App = ({ Component, pageProps }: AppProps): JSX.Element => {
            * Render the current page component with its props
            * Wrapped in layout context for consistent structure
            */}
+          <ToastContainer />
           <Component {...pageProps} />
         </MainLayout>
       </PersistGate>

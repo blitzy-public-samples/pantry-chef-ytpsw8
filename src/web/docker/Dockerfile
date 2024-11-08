@@ -22,7 +22,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 # Copy configuration files
-COPY next.config.js tsconfig.json ./
+COPY next.config.ts tsconfig.json ./
 COPY public ./public
 COPY src ./src
 
@@ -66,7 +66,7 @@ RUN npm ci --only=production
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
-COPY next.config.js ./
+COPY next.config.ts ./
 
 # Set production environment variables
 ENV NODE_ENV=production \

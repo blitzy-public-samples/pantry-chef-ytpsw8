@@ -20,6 +20,7 @@ import {
   CogIcon,
   ClipboardListIcon,
   LogoutIcon,
+  PresentationChartLineIcon
 } from '@heroicons/react/outline'; // ^1.0.0
 
 /**
@@ -62,11 +63,17 @@ const getNavItems = (user: any | null) => [
     requiresAuth: true,
   },
   {
+    path: APP_ROUTES.ANALYTICS,
+    label: 'Analytics',
+    icon: PresentationChartLineIcon,
+    requiresAuth: true,
+  },
+  {
     path: APP_ROUTES.SETTINGS,
     label: 'Settings',
     icon: CogIcon,
     requiresAuth: true,
-  },
+  }
 ].filter(item => !item.requiresAuth || (item.requiresAuth && user));
 
 /**
@@ -76,7 +83,7 @@ const getNavItems = (user: any | null) => [
  * - Navigation Flow: Navigation between key application features
  * - User Interface Design: Responsive layout with user context
  */
-export const Sidebar: React.FC<SidebarProps> = ({
+const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onClose,
   className = '',

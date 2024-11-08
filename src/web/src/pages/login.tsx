@@ -11,17 +11,18 @@ import React, { useEffect } from 'react'; // ^18.0.0
 import { useRouter } from 'next/router'; // ^13.0.0
 import { GetServerSideProps, NextPage } from 'next';
 import LoginForm from '../components/auth/LoginForm';
-import MainLayout from '../components/layout/MainLayout';
 import useAuth from '../hooks/useAuth';
+import Link from 'next/link';
+import { APP_ROUTES } from '../config/constants';
 
-// Constants
-const DASHBOARD_ROUTE = '/dashboard';
+
 
 /**
  * Props interface for the login page component
  */
 interface LoginPageProps {
   redirectUrl?: string;
+
 }
 
 /**
@@ -41,7 +42,7 @@ const LoginPage: NextPage<LoginPageProps> = ({ redirectUrl }) => {
    */
   useEffect(() => {
     if (isAuthenticated && user) {
-      router.push(redirectUrl || DASHBOARD_ROUTE);
+      router.push(redirectUrl || APP_ROUTES.DASHBOARD);
     }
   }, [isAuthenticated, user, router, redirectUrl]);
 
@@ -49,13 +50,13 @@ const LoginPage: NextPage<LoginPageProps> = ({ redirectUrl }) => {
    * Handles successful login by redirecting user
    * Addresses requirement: Authentication Flow - JWT-based session management
    */
-  const handleLoginSuccess = async (user: User) => {
+  const handleLoginSuccess = async () => {
     // Redirect to dashboard or specified URL after successful login
-    await router.push(redirectUrl || DASHBOARD_ROUTE);
+    await router.push(redirectUrl || APP_ROUTES.DASHBOARD);
   };
 
   return (
-    <MainLayout className="bg-gray-50">
+    <>
       <div className="min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
           {/* Login header */}
@@ -80,17 +81,18 @@ const LoginPage: NextPage<LoginPageProps> = ({ redirectUrl }) => {
           <div className="text-center">
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
-              <button
-                onClick={() => router.push('/signup')}
-                className="font-medium text-primary-600 hover:text-primary-500"
-              >
-                Sign up
-              </button>
+              <Link href={APP_ROUTES.SIGNUP}>
+                <button
+                  className="font-medium text-primary-600 hover:text-primary-500"
+                >
+                  Sign up
+                </button>
+              </Link>
             </p>
           </div>
         </div>
       </div>
-    </MainLayout>
+    </>
   );
 };
 
@@ -118,7 +120,7 @@ export const getServerSideProps: GetServerSideProps<LoginPageProps> = async (con
       if (isValid) {
         return {
           redirect: {
-            destination: DASHBOARD_ROUTE,
+            destination: APP_ROUTES.DASHBOARD,
             permanent: false
           }
         };
@@ -135,7 +137,7 @@ export const getServerSideProps: GetServerSideProps<LoginPageProps> = async (con
   // Return props
   return {
     props: {
-      redirectUrl: redirectUrl || undefined
+      redirectUrl: redirectUrl || APP_ROUTES.LOGIN
     }
   };
 };

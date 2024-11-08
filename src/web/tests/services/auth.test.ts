@@ -10,6 +10,7 @@ import { AuthService } from '../../src/services/auth.service';
 import { LoginCredentials, SignupCredentials, AuthResponse } from '../../src/interfaces/auth.interface';
 import { API_ENDPOINTS } from '../../src/config/api';
 import { apiClient } from '../../src/utils/api';
+import { DietaryRestriction, MeasurementSystem, SkillLevel, Theme } from '../../../backend/src/interfaces/user.interface';
 
 /**
  * HUMAN TASKS:
@@ -57,7 +58,29 @@ describe('AuthService', () => {
       id: '123456',
       email: 'test@example.com',
       firstName: 'John',
-      lastName: 'Doe'
+      lastName: 'Doe',
+      passwordHash: '',
+      dietaryRestrictions: [DietaryRestriction.DAIRY_FREE],
+      profileImage: '',
+      savedRecipes: [], // Array of Recipe IDs
+      pantryIds: [],    // Array of Pantry IDs
+      lastLogin: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      preferences: {
+        theme: Theme.DARK,
+        language: '',
+        measurementSystem: MeasurementSystem.METRIC,
+        notificationSettings: {
+          expirationAlerts: false,
+          lowStockAlerts: false,
+          recipeRecommendations: false,
+          emailNotifications: false,
+          pushNotifications: false,
+        },
+        cuisinePreferences: [],
+        skillLevel: SkillLevel.ADVANCED
+      }
     }
   };
 

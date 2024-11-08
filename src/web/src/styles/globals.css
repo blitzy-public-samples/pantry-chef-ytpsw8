@@ -10,6 +10,8 @@
 @tailwind components;
 @tailwind utilities;
 
+
+
 /* Global CSS variables - Requirement: Web Dashboard UI with responsive design */
 :root {
   --navbar-height: 64px;
@@ -17,7 +19,9 @@
   --content-max-width: 1280px;
   --transition-duration: 200ms;
   --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+  --toastify-color-success: theme(colors.primary.600) !important;
 }
+
 
 /* Base styles - Requirement: Frontend UI Framework with Material Design */
 @layer base {
@@ -26,7 +30,7 @@
   }
 
   body {
-    @apply bg-background text-text-primary antialiased dark:bg-background-dark dark:text-white;
+    @apply bg-background-default text-text-primary antialiased dark:bg-background-dark dark:text-white;
   }
 
   ::selection {
@@ -78,6 +82,7 @@
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -88,6 +93,7 @@
     transform: translateY(10px);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -150,7 +156,7 @@
 
 /* Typography styles - Using @tailwindcss/typography plugin */
 .prose {
-  @apply max-w-none dark:prose-invert prose-headings:text-text-primary prose-p:text-text-secondary;
+  @apply max-w-none dark:prose-invert prose-headings:text-text-primary prose-p:text-text-primary;  /*text-text-primary*/
 }
 
 /* Loading states */

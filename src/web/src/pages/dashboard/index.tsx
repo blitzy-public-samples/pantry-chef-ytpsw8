@@ -13,9 +13,10 @@ import UsageMetrics from '../../components/analytics/UsageMetrics';
 import ExpirationTracker from '../../components/pantry/ExpirationTracker';
 import RecipeGrid from '../../components/recipe/RecipeGrid';
 import useAuth from '../../hooks/useAuth';
-import { DashboardMetrics } from '../../interfaces/analytics.interface';
+import { AnalyticsMetrics } from '../../interfaces/analytics.interface';
 import { Recipe, RecipeFilter } from '../../interfaces/recipe.interface';
 import { useRecipes } from '../../hooks/useRecipes';
+import { APP_ROUTES } from '../../config/constants';
 
 /**
  * Main dashboard page component that provides an overview of the PantryChef system
@@ -30,10 +31,10 @@ const DashboardPage: React.FC = () => {
   const router = useRouter();
 
   // Dashboard state management
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [dateRange] = useState({ 
-    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 
-    end: new Date() 
+  const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(null);
+  const [dateRange] = useState({
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    endDate: new Date()
   });
 
   // Recipe management
@@ -50,7 +51,7 @@ const DashboardPage: React.FC = () => {
   // Redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push(APP_ROUTES.LOGIN);
     }
   }, [isAuthenticated, router]);
 
@@ -58,7 +59,7 @@ const DashboardPage: React.FC = () => {
    * Handle metrics data updates
    * Implements requirement: Web Dashboard - Real-time updates for metrics
    */
-  const handleMetricsLoad = useCallback((newMetrics: DashboardMetrics) => {
+  const handleMetricsLoad = useCallback((newMetrics: AnalyticsMetrics) => {
     setMetrics(newMetrics);
   }, []);
 
@@ -67,7 +68,7 @@ const DashboardPage: React.FC = () => {
    * Implements requirement: Recipe Discovery - Recipe details navigation
    */
   const handleRecipeSelect = useCallback((recipeId: string) => {
-    router.push(`/dashboard/recipes/${recipeId}`);
+    router.push(`${APP_ROUTES.RECIPES}/${recipeId}`);
   }, [router]);
 
   /**
@@ -84,12 +85,12 @@ const DashboardPage: React.FC = () => {
   }
 
   return (
-    <MainLayout>
+    <>
       <div className="space-y-6">
         {/* Welcome Section */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h1 className="text-2xl font-bold text-gray-900">
-            Welcome back, {user?.name}
+            Welcome back, {user?.firstName}
           </h1>
           <p className="mt-2 text-gray-600">
             Here's an overview of your PantryChef system
@@ -109,7 +110,7 @@ const DashboardPage: React.FC = () => {
         <section aria-label="Expiring Items">
           <ExpirationTracker
             daysThreshold={7}
-            className="bg-white rounded-lg shadow-sm"
+            className="bg-white rounded-lg shadow-sm p-6"
           />
         </section>
 
@@ -128,7 +129,7 @@ const DashboardPage: React.FC = () => {
           </div>
         </section>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

@@ -3,17 +3,18 @@
 
 import { useDispatch, useSelector } from 'react-redux';
 import { useCallback } from 'react';
-import { 
-  LoginCredentials, 
-  SignupCredentials, 
-  AuthState 
+import {
+  LoginCredentials,
+  SignupCredentials,
+  AuthState
 } from '../interfaces/auth.interface';
-import { 
-  loginThunk, 
-  signupThunk, 
+import {
+  loginThunk,
+  signupThunk,
   logoutThunk,
-  selectAuth 
+  selectAuth
 } from '../store/slices/authSlice';
+import { AppDispatch } from '../store/store';
 
 /**
  * HUMAN TASKS:
@@ -30,7 +31,7 @@ import {
  * - Security Protocols: Implements JWT + OAuth2.0 authentication and session management
  */
 export const useAuth = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const authState = useSelector(selectAuth);
 
   /**
@@ -52,7 +53,7 @@ export const useAuth = () => {
    */
   const signup = useCallback(async (credentials: SignupCredentials) => {
     try {
-      await dispatch(signupThunk(credentials)).unwrap();
+      return await dispatch(signupThunk(credentials)).unwrap();
     } catch (error) {
       // Error handling is managed by the thunk and reflected in auth state
       console.error('Signup failed:', error);

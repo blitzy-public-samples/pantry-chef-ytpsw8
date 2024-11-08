@@ -12,10 +12,11 @@ import { NextPage } from 'next';
 import { toast } from 'react-toastify'; // ^9.0.0
 
 // Internal imports
-import MainLayout from '../components/layout/MainLayout';
 import SignupForm from '../components/auth/SignupForm';
 import { useAuth } from '../hooks/useAuth';
 import { AuthResponse } from '../interfaces/auth.interface';
+import Link from 'next/link';
+import { APP_ROUTES } from '../config/constants';
 
 /**
  * SignupPage component for user registration
@@ -34,7 +35,7 @@ const SignupPage: NextPage = () => {
    */
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace('/dashboard');
+      router.replace(APP_ROUTES.DASHBOARD);
     }
   }, [isAuthenticated, router]);
 
@@ -44,7 +45,7 @@ const SignupPage: NextPage = () => {
    */
   const handleSignupSuccess = async (response: AuthResponse) => {
     toast.success('Account created successfully! Welcome to PantryChef.');
-    await router.push('/dashboard');
+    // await router.push(APP_ROUTES.DASHBOARD);
   };
 
   /**
@@ -56,8 +57,8 @@ const SignupPage: NextPage = () => {
   };
 
   return (
-    <MainLayout>
-      <div className="container flex flex-col items-center justify-center min-h-[calc(100vh-64px)] px-6">
+    <>
+      <div className="container flex flex-col items-center justify-center min-h-[calc(100vh-64px)] px-6 mx-auto">
         <div className="w-full max-w-480 p-8 bg-background-paper rounded-lg shadow-md">
           {/* Page Title */}
           <h1 className="text-2xl font-bold text-center mb-6">
@@ -79,16 +80,17 @@ const SignupPage: NextPage = () => {
           {/* Login Link */}
           <p className="text-center mt-6 text-gray-600">
             Already have an account?{' '}
-            <a
-              href="/login"
-              className="text-primary-main hover:text-primary-dark font-medium"
-            >
-              Sign in
-            </a>
+            <Link href={APP_ROUTES.LOGIN}>
+              <button
+                className="font-medium text-primary-600 hover:text-primary-500"
+              >
+                Sign in
+              </button>
+            </Link>
           </p>
         </div>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

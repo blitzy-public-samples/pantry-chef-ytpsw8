@@ -10,13 +10,14 @@
 // @version react ^18.0.0
 import React, { useEffect, useState, useMemo } from 'react';
 // @version recharts ^2.0.0
-import { PieChart, Pie, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { PieChart, Pie, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Label, Customized, Text, Legend } from 'recharts';
 
 // Internal dependencies
-import { AnalyticsMetrics, DateRange } from '../../interfaces/analytics.interface';
-import { InventoryItem, StorageLocation } from '../../interfaces/inventory.interface';
+import { DateRange } from '../../interfaces/analytics.interface';
+import { StorageLocation } from '../../interfaces/inventory.interface';
 import { analyticsService } from '../../services/analytics.service';
 import Card from '../common/Card';
+import theme from '../../config/theme';
 
 /**
  * Props for the InventoryStats component
@@ -59,7 +60,7 @@ const useInventoryStats = (timeRange: DateRange) => {
       try {
         setLoading(true);
         const data = await analyticsService.getMetrics(timeRange);
-        
+
         // Process and transform the data for visualization
         const processedMetrics: InventoryMetrics = {
           categoryDistribution: {},
@@ -95,20 +96,40 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({ className, timeRange })
   const { metrics, loading, error } = useInventoryStats(timeRange);
 
   // Chart colors configuration
-  const CHART_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#a4de6c'];
+  const CHART_COLORS = Object.values(theme.chartColors);
 
   /**
    * Renders the category distribution pie chart
    * Requirement: Digital Pantry Management - Category-based organization metrics
    */
+
+  const RenderEmptyChart = ({ isEmpty }: { isEmpty: boolean }) => {
+    return isEmpty ? (
+      <Text
+        style={{ transform: `translate(50%, 50%)` }}
+        x={0}
+        textAnchor="middle"
+        verticalAnchor="middle"
+      >
+        No metrics data available
+      </Text>
+    ) : null
+  }
+
   const renderCategoryDistribution = () => {
     const data = Object.entries(metrics.categoryDistribution).map(([name, value]) => ({
       name,
       value
     }));
 
+    // Mock data
+    // const data = Array(8).fill(8).map((i) => ({
+    //   name: `Item-${Math.round(Math.random() * 25)}`,
+    //   value: Math.round(Math.random() * 25),
+    // }));
+
     return (
-      <Card className="h-80">
+      <Card className="h-80 mb-8">
         <h3 className="text-lg font-semibold mb-4">Category Distribution</h3>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -126,6 +147,10 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({ className, timeRange })
               ))}
             </Pie>
             <Tooltip />
+            <Customized
+              component={<RenderEmptyChart isEmpty={!data || !Object.values(data)?.length} />}
+            />
+            <Legend layout="horizontal" />
           </PieChart>
         </ResponsiveContainer>
       </Card>
@@ -142,20 +167,27 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({ className, timeRange })
       count: item.count
     }));
 
+    // Mock data
+    // const data = Array(7).fill(1).map((i) => ({ date: new Date(new Date(2024, 2, 11).getTime() + Math.random() * (new Date(2024, 20, 11).getTime() - new Date(2024, 2, 11).getTime())).toLocaleDateString(), count: Math.random() * 25 }))
+
+
     return (
-      <Card className="h-80">
+      <Card className="h-80 mb-8">
         <h3 className="text-lg font-semibold mb-4">Expiration Timeline</h3>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
+            {data?.length != 0 && <CartesianGrid strokeDasharray="3 3" />}
             <XAxis dataKey="date" />
             <YAxis />
             <Tooltip />
             <Line
               type="monotone"
               dataKey="count"
-              stroke="#8884d8"
+              stroke={theme.chartColors.darkerBlue}
               activeDot={{ r: 8 }}
+            />
+            <Customized
+              component={<RenderEmptyChart isEmpty={!data || !Object.values(data)?.length} />}
             />
           </LineChart>
         </ResponsiveContainer>
@@ -173,8 +205,20 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({ className, timeRange })
       value
     }));
 
+    // Mock data
+    // const data = Object.entries({
+    //   [StorageLocation.REFRIGERATOR]: 205,
+    //   [StorageLocation.FREEZER]: 600,
+    //   [StorageLocation.PANTRY]: 140
+    // }).map(([name, value]) => ({
+    //   name,
+    //   value
+    // }));
+
+    const allItemsCount = data.reduce((a, p) => a + p.value, 0)
+
     return (
-      <Card className="h-80">
+      <Card className="h-80 mb-8">
         <h3 className="text-lg font-semibold mb-4">Storage Location Breakdown</h3>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -192,6 +236,10 @@ const InventoryStats: React.FC<InventoryStatsProps> = ({ className, timeRange })
               ))}
             </Pie>
             <Tooltip />
+            <Customized
+              component={<RenderEmptyChart isEmpty={allItemsCount === 0} />}
+            />
+            <Legend layout="horizontal" />
           </PieChart>
         </ResponsiveContainer>
       </Card>

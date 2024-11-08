@@ -40,12 +40,12 @@ describe('auth slice', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
+
     // Configure test store
     store = configureStore({
       reducer: { auth: reducer }
     });
-    
+
     // Get mock auth service instance
     mockAuthService = require('../../src/services/auth.service').AuthService.mock.results[0].value;
   });
@@ -78,7 +78,16 @@ describe('auth slice', () => {
         id: '123',
         email: 'test@example.com',
         firstName: 'Test',
-        lastName: 'User'
+        lastName: 'User',
+        passwordHash: '',
+        profileImage: '',
+        preferences: undefined,
+        dietaryRestrictions: [],
+        savedRecipes: [],
+        pantryIds: [],
+        lastLogin: undefined,
+        createdAt: undefined,
+        updatedAt: undefined
       }
     };
 
@@ -116,8 +125,8 @@ describe('auth slice', () => {
 
     test('should set loading state during login', () => {
       // Requirement: Authentication Service - Loading state management
-      mockAuthService.login.mockImplementationOnce(() => new Promise(() => {}));
-      
+      mockAuthService.login.mockImplementationOnce(() => new Promise(() => { }));
+
       // Dispatch login action
       store.dispatch(loginThunk(mockCredentials));
       const state = store.getState().auth;
@@ -297,10 +306,10 @@ describe('auth slice', () => {
     test('should clear error state', () => {
       // Requirement: Authentication Service - Error state management
       // Set initial error state
-      store.dispatch(loginThunk.rejected(new Error('Test error'), '', { 
-        email: '', 
-        password: '', 
-        rememberMe: false 
+      store.dispatch(loginThunk.rejected(new Error('Test error'), '', {
+        email: '',
+        password: '',
+        rememberMe: false
       }));
 
       // Clear error

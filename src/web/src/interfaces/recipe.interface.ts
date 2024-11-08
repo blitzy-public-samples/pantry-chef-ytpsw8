@@ -75,8 +75,8 @@ export interface Recipe {
   tags: string[];
   nutritionInfo: NutritionInfo;
   createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**

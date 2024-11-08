@@ -18,10 +18,10 @@ interface InputProps {
   name: string;
   label: string;
   type: string;
-  placeholder: string;
-  value: any;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  value?: any;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   required?: boolean;
   disabled?: boolean;
   error?: string;
@@ -29,6 +29,7 @@ interface InputProps {
   className?: string;
   'aria-label'?: string;
   'aria-describedby'?: string;
+  labelClassName?: string;
 }
 
 /**
@@ -53,6 +54,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       error,
       helperText,
       className,
+      labelClassName,
       'aria-label': ariaLabel,
       'aria-describedby': ariaDescribedBy,
     },
@@ -65,7 +67,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const validateInput = useCallback(
       (value: string) => {
         if (!isDirty) return '';
-        
+
         switch (type) {
           case 'email':
             return !validateEmail(value) ? 'Please enter a valid email address' : '';
@@ -97,23 +99,28 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
     // Dynamic class generation based on state and props
     const containerClasses = classNames(
-      'input-container relative mb-4',
+      'input-container',
       className
     );
 
+    const containerWrapperClasses = classNames(
+      'relative'
+    )
+
     const labelClasses = classNames(
-      'input-label absolute left-0 transition-all duration-200',
+      'input-label absolute text-sm  duration-300 transform -translate-y-3 scale-75 top-1 z-10 origin-[0] bg-white px-2 peer-focus:px-2 peer-focus:text-blue-600 peer-focus:dark:text-blue-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-1 peer-focus:scale-75 peer-focus:-translate-y-3 start-1 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto',
       {
-        'text-sm text-secondary-600': !isFocused && !value,
-        'text-xs text-primary-600 -top-6': isFocused || value,
-        'text-error-main': error,
+        'text-sm text-secondary-600': !isFocused && !value && !error,
+        'text-xs text-primary-600': isFocused || value,
+        'text-error-main peer-focus:text-red-600': error,
         'text-secondary-400': disabled,
-      }
+      },
+      labelClassName,
+
     );
 
     const inputClasses = classNames(
-      'input-field w-full px-3 py-2 border rounded-md transition-all duration-200',
-      'focus:outline-none focus:ring-2',
+      "input-field px-3 py-2 w-full text-sm border rounded-md bg-transparent rounded-lg focus:outline-none focus:ring-0 peer",
       {
         'border-secondary-300 focus:border-primary-500 focus:ring-primary-200':
           !error && !disabled,
@@ -122,7 +129,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         'bg-secondary-100 border-secondary-200 cursor-not-allowed': disabled,
         'input-disabled': disabled,
         'input-error': error,
-        'input-focus': isFocused,
+        'input-focus placeholder-opacity-100': isFocused,
       }
     );
 
@@ -136,48 +143,49 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
 
     return (
       <div className={containerClasses}>
-        <label
-          htmlFor={id}
-          className={labelClasses}
-        >
-          {label}
-          {required && (
-            <span className="input-required text-error-main ml-1">*</span>
-          )}
-        </label>
-        
-        <input
-          ref={ref}
-          id={id}
-          name={name}
-          type={type}
-          value={value}
-          onChange={onChange}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          placeholder={placeholder}
-          disabled={disabled}
-          required={required}
-          aria-label={ariaLabel || label}
-          aria-invalid={!!error}
-          aria-required={required}
-          aria-describedby={
-            error
-              ? errorId
-              : helperText
-              ? helperId
-              : ariaDescribedBy
-          }
-          className={inputClasses}
-          style={{
-            fontFamily: typography.fontFamily.sans.join(', '),
-            fontSize: typography.fontSize.base,
-            borderRadius: borderRadius.md,
-            paddingTop: spacing[2],
-            paddingBottom: spacing[2],
-          }}
-        />
+        <div className={containerWrapperClasses}>
+          <input
+            ref={ref}
+            id={id}
+            name={name}
+            type={type}
+            value={value}
+            onChange={onChange}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            placeholder={''}
+            disabled={disabled}
+            required={required}
+            aria-label={ariaLabel || label}
+            aria-invalid={!!error}
+            aria-required={required}
 
+            aria-describedby={
+              error
+                ? errorId
+                : helperText
+                  ? helperId
+                  : ariaDescribedBy
+            }
+            className={inputClasses}
+            style={{
+              fontFamily: typography.fontFamily.sans,
+              fontSize: typography.fontSize.base,
+              borderRadius: borderRadius.md,
+              paddingTop: spacing[2],
+              paddingBottom: spacing[2],
+            }}
+          />
+          <label
+            htmlFor={id}
+            className={labelClasses}
+          >
+            {label}
+            {required && (
+              <span className="input-required text-error-main ml-1">*</span>
+            )}
+          </label>
+        </div>
         {(error || helperText) && (
           <p
             id={error ? errorId : helperId}

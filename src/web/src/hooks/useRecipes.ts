@@ -19,6 +19,7 @@ import {
   matchRecipesWithIngredients,
   fetchRecipeById
 } from '../store/slices/recipeSlice';
+import { AppDispatch } from '../store/store';
 
 /**
  * Custom hook for managing recipe-related operations and state in the PantryChef web application
@@ -28,8 +29,8 @@ import {
  * - Recipe Discovery (8.1 User Interface Design/Mobile Application Layout)
  */
 export const useRecipes = () => {
-  const dispatch = useDispatch();
-  
+  const dispatch = useDispatch<AppDispatch>();
+
   // Get recipe state from Redux store
   const {
     recipes,
@@ -50,8 +51,8 @@ export const useRecipes = () => {
    */
   const fetchRecipesList = useCallback(async (
     filter: RecipeFilter,
-    page: number,
-    limit: number
+    page?: number,
+    limit?: number
   ): Promise<void> => {
     try {
       setLoading(true);
@@ -59,6 +60,7 @@ export const useRecipes = () => {
       await dispatch(fetchRecipes({ filter, page, limit })).unwrap();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch recipes');
+      console.log('Failed to fetch recipes')
     } finally {
       setLoading(false);
     }
@@ -99,7 +101,7 @@ export const useRecipes = () => {
         tags: [],
         searchTerm: ''
       };
-      await dispatch(fetchRecipes({ 
+      await dispatch(fetchRecipes({
         filter: recommendedFilter,
         page: 1,
         limit: 10
@@ -131,14 +133,14 @@ export const useRecipes = () => {
   return {
     // Recipe data
     recipes,
-    matchingRecipes,
+    matchedRecipes,
     totalRecipes,
     favoriteRecipes,
-    
+
     // Loading and error states
     loading: loading || reduxLoading,
     error: error || reduxError,
-    
+
     // Recipe operations
     fetchRecipes: fetchRecipesList,
     findMatchingRecipes,

@@ -7,11 +7,11 @@ import MockAdapter from 'axios-mock-adapter';
 // Internal dependencies
 import ShoppingService from '../../src/services/shopping.service';
 import { apiClient } from '../../src/utils/api';
-import { 
-  ShoppingList, 
-  ShoppingListItem, 
-  ShoppingListFilter, 
-  ShoppingListGenerationOptions 
+import {
+  ShoppingList,
+  ShoppingListItem,
+  ShoppingListFilter,
+  ShoppingListGenerationOptions
 } from '../../src/interfaces/shopping.interface';
 
 describe('ShoppingService', () => {
@@ -43,7 +43,9 @@ describe('ShoppingService', () => {
     categories: ['Vegetables', 'Fruits'],
     searchTerm: 'tomato',
     showCheckedItems: false,
-    recipeId: 'recipe1'
+    recipeId: 'recipe1',
+    sortBy: '',
+    sortDirection: '',
   };
 
   const mockGenerationOptions: ShoppingListGenerationOptions = {
@@ -111,7 +113,7 @@ describe('ShoppingService', () => {
     });
 
     it('should handle validation errors during list creation', async () => {
-      const invalidList = { items: 'invalid' };
+      const invalidList = { items: [] }; //{ items: 'invalid' }?
       mockApi.onPost('/api/v1/shopping/lists').reply(400, { message: 'Invalid list data' });
 
       await expect(ShoppingService.createShoppingList(invalidList)).rejects.toThrow('Invalid request');

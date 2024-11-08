@@ -55,7 +55,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
 
   const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     event.preventDefault();
-    
+
     let newValue: string | string[];
     if (multiple) {
       // Extract all selected values for multi-select
@@ -96,19 +96,19 @@ export const Dropdown: React.FC<DropdownProps> = ({
       // Base styles
       'py-2 px-3': true,
       [theme.typography.fontSize.base]: true,
-      
+
       // Border radius
       [theme.borderRadius.md]: true,
-      
+
       // Disabled state
       'bg-gray-100 cursor-not-allowed opacity-75': disabled,
-      
+
       // Error state
       'border-error-500 focus:border-error-500 focus:ring-error-500': error,
-      
+
       // Default state
       'border-gray-300 focus:border-primary-500 focus:ring-primary-500': !error && !disabled,
-      
+
       // Text colors
       [theme.palette.text.primary]: !disabled,
       [theme.palette.text.disabled]: disabled
@@ -125,7 +125,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
   return (
     <div className={containerClasses}>
       {label && (
-        <label 
+        <label
           htmlFor={id}
           className={labelClasses}
         >
@@ -133,7 +133,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
           {required && <span className={theme.palette.error.main}>*</span>}
         </label>
       )}
-      
+
       <select
         id={id}
         name={name}
@@ -150,7 +150,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
             {placeholder}
           </option>
         )}
-        
+
         {options.map((option) => (
           <option
             key={option.value}

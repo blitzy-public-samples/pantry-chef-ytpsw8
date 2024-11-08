@@ -97,8 +97,17 @@ describe('Recipe Slice Tests', () => {
   describe('fetchRecipes thunk', () => {
     test('should handle fetchRecipes.pending', () => {
       const store = setupStore();
-      store.dispatch(fetchRecipes.pending('', { filter: {}, page: 1, limit: 10 }));
-      
+      store.dispatch(fetchRecipes.pending('', {
+        filter: {
+          difficulty: [],
+          maxPrepTime: 0,
+          maxCookTime: 0,
+          tags: [],
+          ingredients: [],
+          searchTerm: ''
+        }, page: 1, limit: 10
+      }));
+
       const state = store.getState().recipe;
       expect(state.loading).toBe(true);
       expect(state.error).toBeNull();
@@ -110,7 +119,7 @@ describe('Recipe Slice Tests', () => {
         total: 1
       };
 
-      (recipeService.getRecipes as jest.Mock).mockResolvedValue(mockResponse);
+      (recipeService.getRecipes as jest.Mocked<typeof recipeService.getRecipes>).mockResolvedValue(mockResponse);
 
       const store = setupStore();
       await store.dispatch(fetchRecipes({
@@ -127,7 +136,7 @@ describe('Recipe Slice Tests', () => {
 
     test('should handle fetchRecipes.rejected', async () => {
       const errorMessage = 'Failed to fetch recipes';
-      (recipeService.getRecipes as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      (recipeService.getRecipes as jest.Mocked<typeof recipeService.getRecipes>).mockRejectedValue(new Error(errorMessage));
 
       const store = setupStore();
       await store.dispatch(fetchRecipes({
@@ -145,7 +154,7 @@ describe('Recipe Slice Tests', () => {
   // Test fetchRecipeById thunk
   describe('fetchRecipeById thunk', () => {
     test('should fetch single recipe successfully', async () => {
-      (recipeService.getRecipeById as jest.Mock).mockResolvedValue(mockRecipe);
+      (recipeService.getRecipeById as jest.Mocked<typeof recipeService.getRecipeById>).mockResolvedValue(mockRecipe);
 
       const store = setupStore();
       await store.dispatch(fetchRecipeById('1'));
@@ -158,7 +167,7 @@ describe('Recipe Slice Tests', () => {
 
     test('should handle fetchRecipeById error', async () => {
       const errorMessage = 'Recipe not found';
-      (recipeService.getRecipeById as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      (recipeService.getRecipeById as jest.Mocked<typeof recipeService.getRecipeById>).mockRejectedValue(new Error(errorMessage));
 
       const store = setupStore();
       await store.dispatch(fetchRecipeById('invalid-id'));
@@ -174,7 +183,7 @@ describe('Recipe Slice Tests', () => {
   describe('matchRecipesWithIngredients thunk', () => {
     test('should find matching recipes successfully', async () => {
       const matchedRecipes = [mockRecipe];
-      (recipeService.matchRecipes as jest.Mock).mockResolvedValue(matchedRecipes);
+      (recipeService.matchRecipes as jest.Mocked<typeof recipeService.matchRecipes>).mockResolvedValue(matchedRecipes);
 
       const store = setupStore();
       await store.dispatch(matchRecipesWithIngredients(['ing1']));
@@ -187,7 +196,7 @@ describe('Recipe Slice Tests', () => {
 
     test('should handle matchRecipesWithIngredients error', async () => {
       const errorMessage = 'Failed to match recipes';
-      (recipeService.matchRecipes as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      (recipeService.matchRecipes as jest.Mocked<typeof recipeService.matchRecipes>).mockRejectedValue(new Error(errorMessage));
 
       const store = setupStore();
       await store.dispatch(matchRecipesWithIngredients(['ing1']));
@@ -202,7 +211,7 @@ describe('Recipe Slice Tests', () => {
   // Test toggleFavoriteRecipe thunk
   describe('toggleFavoriteRecipe thunk', () => {
     test('should save recipe as favorite', async () => {
-      (recipeService.saveRecipe as jest.Mock).mockResolvedValue(undefined);
+      (recipeService.saveRecipe as jest.Mocked<typeof recipeService.saveRecipe>).mockResolvedValue(undefined);
 
       const store = setupStore();
       await store.dispatch(toggleFavoriteRecipe({ recipeId: '1', isFavorite: true }));
@@ -214,7 +223,7 @@ describe('Recipe Slice Tests', () => {
     });
 
     test('should unsave recipe from favorites', async () => {
-      (recipeService.unsaveRecipe as jest.Mock).mockResolvedValue(undefined);
+      (recipeService.unsaveRecipe as jest.Mocked<typeof recipeService.unsaveRecipe>).mockResolvedValue(undefined);
 
       const store = setupStore({
         recipe: {
@@ -233,7 +242,7 @@ describe('Recipe Slice Tests', () => {
 
     test('should handle toggleFavoriteRecipe error', async () => {
       const errorMessage = 'Failed to update favorite status';
-      (recipeService.saveRecipe as jest.Mock).mockRejectedValue(new Error(errorMessage));
+      (recipeService.saveRecipe as jest.Mocked<typeof recipeService.saveRecipe>).mockRejectedValue(new Error(errorMessage));
 
       const store = setupStore();
       await store.dispatch(toggleFavoriteRecipe({ recipeId: '1', isFavorite: true }));

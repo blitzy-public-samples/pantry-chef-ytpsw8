@@ -6,9 +6,8 @@
  */
 
 import React, { useCallback, useState, useEffect } from 'react'; // ^18.0.0
-import classNames from 'classnames'; // ^2.3.1
 import RecipeCard from './RecipeCard';
-import RecipeFilter from './RecipeFilter';
+import { RecipeFilter } from './RecipeFilter';
 import { Recipe, RecipeFilter as IRecipeFilter } from '../../interfaces/recipe.interface';
 
 /**
@@ -30,6 +29,9 @@ interface RecipeGridProps {
   availableIngredients?: string[];
 }
 
+
+const DEFAULT_EMPTY_ARRAY_PROP = [];
+
 /**
  * A responsive grid component that displays recipe cards with filtering capabilities
  * Implements requirements:
@@ -41,8 +43,8 @@ const RecipeGrid: React.FC<RecipeGridProps> = ({
   loading,
   onRecipeSelect,
   onFilterChange,
-  availableTags = [],
-  availableIngredients = []
+  availableTags = DEFAULT_EMPTY_ARRAY_PROP,
+  availableIngredients = DEFAULT_EMPTY_ARRAY_PROP
 }) => {
   // Initial filter state
   const [filters, setFilters] = useState<IRecipeFilter>({
@@ -70,7 +72,7 @@ const RecipeGrid: React.FC<RecipeGridProps> = ({
     setFilters(prevFilters => ({
       ...prevFilters,
       tags: prevFilters.tags.filter(tag => availableTags.includes(tag)),
-      ingredients: prevFilters.ingredients.filter(ingredient => 
+      ingredients: prevFilters.ingredients.filter(ingredient =>
         availableIngredients.includes(ingredient)
       )
     }));
@@ -103,7 +105,7 @@ const RecipeGrid: React.FC<RecipeGridProps> = ({
           </div>
         ) : recipes.length > 0 ? (
           // Recipe Grid
-          <div 
+          <div
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
             role="grid"
             aria-label="Recipe grid"

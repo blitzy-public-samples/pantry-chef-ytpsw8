@@ -8,11 +8,11 @@
 
 // @version: @reduxjs/toolkit ^1.9.5
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { 
-  ShoppingList, 
-  ShoppingListItem, 
+import {
+  ShoppingList,
+  ShoppingListItem,
   ShoppingListFilter,
-  ShoppingListGenerationOptions 
+  ShoppingListGenerationOptions
 } from '../../interfaces/shopping.interface';
 import ShoppingService from '../../services/shopping.service';
 
@@ -33,7 +33,9 @@ const initialState: ShoppingState = {
     categories: [],
     searchTerm: '',
     showCheckedItems: true,
-    recipeId: ''
+    recipeId: '',
+    sortBy: '', // add default value
+    sortDirection: '', // add default value
   },
   loading: false,
   error: null
@@ -142,7 +144,7 @@ const shoppingSlice = createSlice({
     setFilter: (state, action: PayloadAction<Partial<ShoppingListFilter>>) => {
       state.filter = { ...state.filter, ...action.payload };
     },
-    
+
     // Toggle checked status of shopping list item
     toggleItemChecked: (state, action: PayloadAction<{ listId: string; itemId: string }>) => {
       const list = state.lists.find(l => l.id === action.payload.listId);
@@ -153,7 +155,7 @@ const shoppingSlice = createSlice({
         }
       }
     },
-    
+
     // Clear all filters
     clearFilter: (state) => {
       state.filter = initialState.filter;
@@ -233,17 +235,17 @@ export const shoppingSelectors = {
   selectFilteredItems: (state: { shopping: ShoppingState }) => {
     const list = state.shopping.currentList;
     const filter = state.shopping.filter;
-    
+
     if (!list) return [];
-    
+
     return list.items.filter(item => {
-      const matchesCategory = filter.categories.length === 0 || 
+      const matchesCategory = filter.categories.length === 0 ||
         filter.categories.includes(item.category);
-      const matchesSearch = !filter.searchTerm || 
+      const matchesSearch = !filter.searchTerm ||
         item.name.toLowerCase().includes(filter.searchTerm.toLowerCase());
       const matchesChecked = filter.showCheckedItems || !item.checked;
       const matchesRecipe = !filter.recipeId || item.recipeId === filter.recipeId;
-      
+
       return matchesCategory && matchesSearch && matchesChecked && matchesRecipe;
     });
   }

@@ -11,11 +11,11 @@
 import { AxiosError } from 'axios';
 
 // Internal dependencies
-import { 
-  ShoppingList, 
-  ShoppingListItem, 
-  ShoppingListFilter, 
-  ShoppingListGenerationOptions 
+import {
+  ShoppingList,
+  ShoppingListItem,
+  ShoppingListFilter,
+  ShoppingListGenerationOptions
 } from '../interfaces/shopping.interface';
 import { apiClient, handleApiError } from '../utils/api';
 
@@ -41,6 +41,40 @@ const ShoppingService = {
     try {
       const response = await apiClient.get<ShoppingList[]>(SHOPPING_API.LISTS);
       return response.data;
+      // Mock data
+      // return [
+      //   {
+      //     id: "1",
+      //     name: "Weekly Groceries",
+      //     items: [
+      //       {
+      //         id: "1",
+      //         name: "Milk",
+      //         quantity: 2,
+      //         checked: false,
+      //         unit: 'dfsdf',
+      //         category: 'Dairy',
+      //         notes: 'dsfdfsd',
+      //         recipeId: '1',
+      //         recipeName: '',
+      //       },
+      //       {
+      //         id: "2",
+      //         name: "Chicken Breast",
+      //         quantity: 1,
+      //         checked: true,
+      //         unit: 'dfsdf',
+      //         category: 'Dairy',
+      //         notes: 'dsfdfsd',
+      //         recipeId: '1',
+      //         recipeName: '',
+      //       },
+      //     ],
+      //     createdAt: new Date("2024-11-01").toISOString(),
+      //     updatedAt: new Date("2024-11-07").toISOString(),
+      //     userId: "user123",
+      //   }
+      // ]
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
@@ -67,6 +101,26 @@ const ShoppingService = {
     try {
       const response = await apiClient.post<ShoppingList>(SHOPPING_API.LISTS, data);
       return response.data;
+      // Mock data
+      // return {
+      //   items: [{
+      //     id: 'item1',
+      //     name: 'Tomatoes',
+      //     quantity: 2,
+      //     unit: 'kg',
+      //     category: 'Vegetables',
+      //     checked: false,
+      //     notes: 'Ripe ones please',
+      //     recipeId: 'recipe1',
+      //     recipeName: 'Pasta Sauce'
+      //   }],
+      //   createdAt: new Date("2024-11-01").toISOString(),
+      //   updatedAt: new Date("2024-11-07").toISOString(),
+      //   userId: data.userId,
+      //   name: data.name,
+      //   id: data.id,
+      // }
+
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
@@ -115,14 +169,14 @@ const ShoppingService = {
    * Requirement: Shopping List Management
    */
   async updateShoppingListItem(
-    listId: string, 
-    itemId: string, 
+    listId: string,
+    itemId: string,
     data: Partial<ShoppingListItem>
   ): Promise<ShoppingListItem> {
     try {
       const endpoint = SHOPPING_API.ITEMS.replace(':listId', listId);
       const response = await apiClient.put<ShoppingListItem>(
-        `${endpoint}/${itemId}`, 
+        `${endpoint}/${itemId}`,
         data
       );
       return response.data;
@@ -136,7 +190,7 @@ const ShoppingService = {
    * Requirement: Simplified Grocery Shopping (1.2 Scope/Key Benefits)
    */
   async filterShoppingList(
-    listId: string, 
+    listId: string,
     filter: ShoppingListFilter
   ): Promise<ShoppingListItem[]> {
     try {

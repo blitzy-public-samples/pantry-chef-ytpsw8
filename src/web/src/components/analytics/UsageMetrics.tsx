@@ -65,15 +65,15 @@ const UsageMetrics: React.FC<UsageMetricsProps> = ({
    */
   const formatMetricValue = (value: number): string => {
     if (value === null || value === undefined) return '0';
-    
+
     if (value >= 1000000) {
       return `${(value / 1000000).toFixed(1)}M`;
     }
-    
+
     if (value >= 1000) {
       return `${(value / 1000).toFixed(1)}K`;
     }
-    
+
     return value.toLocaleString();
   };
 
@@ -95,7 +95,7 @@ const UsageMetrics: React.FC<UsageMetricsProps> = ({
     return (
       <Card className={`p-4 bg-red-50 border border-red-200 ${className}`}>
         <p className="text-red-600">{error}</p>
-        <button 
+        <button
           onClick={() => window.location.reload()}
           className="mt-2 text-sm text-red-700 underline"
         >

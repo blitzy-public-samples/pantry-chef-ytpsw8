@@ -51,7 +51,7 @@ export const RecipeFilter: React.FC<RecipeFilterProps> = ({
 
   // Handle difficulty filter changes
   const handleDifficultyChange = useCallback((selectedDifficulties: string | string[]) => {
-    const difficulties = Array.isArray(selectedDifficulties) 
+    const difficulties = Array.isArray(selectedDifficulties)
       ? selectedDifficulties as RecipeDifficulty[]
       : [selectedDifficulties as RecipeDifficulty];
 
@@ -102,7 +102,7 @@ export const RecipeFilter: React.FC<RecipeFilterProps> = ({
     <div className="flex flex-col gap-4 p-4 bg-white rounded-lg shadow">
       {/* Search Input */}
       <div className="flex flex-col gap-2">
-        <label 
+        <label
           htmlFor="recipe-search"
           className="text-sm font-medium text-gray-700"
         >
@@ -138,7 +138,7 @@ export const RecipeFilter: React.FC<RecipeFilterProps> = ({
 
       {/* Preparation Time Filter */}
       <div className="flex flex-col gap-2">
-        <label 
+        <label
           htmlFor="prep-time"
           className="text-sm font-medium text-gray-700"
         >
@@ -161,7 +161,7 @@ export const RecipeFilter: React.FC<RecipeFilterProps> = ({
 
       {/* Cooking Time Filter */}
       <div className="flex flex-col gap-2">
-        <label 
+        <label
           htmlFor="cook-time"
           className="text-sm font-medium text-gray-700"
         >
