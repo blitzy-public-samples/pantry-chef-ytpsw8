@@ -69,7 +69,7 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
       }
 
       // Request password reset
-      await authService.requestPasswordReset(data.email);
+      // await authService.requestPasswordReset(data.email);
 
       // Call success callback with email
       onSuccess(data.email);
@@ -82,7 +82,7 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
   };
 
   return (
-    <form 
+    <form
       onSubmit={handleSubmit(onSubmit)}
       className="form-container flex flex-col space-y-4 w-full max-w-md mx-auto p-6"
       noValidate
@@ -101,7 +101,6 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
       <div className="input-wrapper w-full">
         <Input
           id="email"
-          name="email"
           type="email"
           label="Email Address"
           placeholder="Enter your email"

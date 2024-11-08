@@ -32,11 +32,11 @@ const recipeService = {
     try {
       // Normalize filter parameters
       const normalizedFilter = {
-        difficulty: filter.difficulty || [],
-        maxPrepTime: filter.maxPrepTime || 0,
-        maxCookTime: filter.maxCookTime || 0,
-        ingredients: filter.ingredients || [],
-        tags: filter.tags || [],
+        difficulty: filter.difficulty.join(',') || '',
+        maxPrepTime: filter.maxPrepTime.toString() || '0',
+        maxCookTime: filter.maxCookTime.toString() || '0',
+        ingredients: filter.ingredients.join(',') || '',
+        tags: filter.tags.join(',') || '',
         searchTerm: filter.searchTerm?.trim() || ''
       };
 
@@ -45,9 +45,6 @@ const recipeService = {
         page: page.toString(),
         limit: limit.toString(),
         ...normalizedFilter,
-        difficulty: normalizedFilter.difficulty.join(','),
-        ingredients: normalizedFilter.ingredients.join(','),
-        tags: normalizedFilter.tags.join(',')
       });
 
       const response = await apiClient.get(

@@ -11,11 +11,11 @@
 import axios from 'axios';
 
 // Internal dependencies
-import { 
-  AnalyticsEvent, 
-  AnalyticsEventType, 
-  AnalyticsMetrics, 
-  DateRange 
+import {
+  AnalyticsEvent,
+  AnalyticsEventType,
+  AnalyticsMetrics,
+  DateRange
 } from '../interfaces/analytics.interface';
 import { ANALYTICS_CONFIG } from '../config/constants';
 import { apiClient } from '../utils/api';
@@ -84,6 +84,20 @@ class AnalyticsService {
       });
 
       return response.data;
+
+      // Mock data
+      // return {
+      //   totalUsers: 1200,
+      //   activeUsers: 850,
+      //   recipeViews: 5000,
+      //   ingredientScans: 1200,
+      //   pantryUpdates: 800,
+      //   shoppingListUpdates: 600,
+      //   timeRange: {
+      //     startDate: new Date("2024-10-01"),
+      //     endDate: new Date("2024-10-31"),
+      //   },
+      // }
     } catch (error) {
       console.error('Error retrieving analytics metrics:', error);
       throw new Error('Failed to retrieve analytics metrics');
@@ -131,7 +145,7 @@ class AnalyticsService {
       await apiClient.post('/analytics/events', payload);
     } catch (error) {
       console.error('Error flushing analytics events:', error);
-      
+
       // Return events to queue on failure
       // Add at beginning to maintain chronological order
       this.eventQueue.unshift(...events);

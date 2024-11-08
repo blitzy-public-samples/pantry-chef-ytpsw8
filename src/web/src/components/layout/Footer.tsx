@@ -8,6 +8,7 @@
  */
 
 import React from 'react';
+import NextLink from 'next/link';
 import { Box, Typography, Container, Link, IconButton, useTheme, useMediaQuery } from '@mui/material';
 import FacebookIcon from '@mui/icons-material/Facebook';
 import TwitterIcon from '@mui/icons-material/Twitter';
@@ -24,6 +25,17 @@ import { APP_ROUTES } from '../../config/constants';
 const Footer: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+
+  const LinkComponent = ({ href, name }: { href: string, name: string }) =>
+    <Link
+      href={href}
+      color="inherit"
+      underline="hover"
+      component={NextLink}
+      sx={{ fontFamily: typography.fontFamily.sans }}
+    >{name}</Link>
+
 
   return (
     <Box
@@ -69,46 +81,26 @@ const Footer: React.FC = () => {
             margin: `${spacing[2]} 0`
           }}
         >
-          <Link
+          <LinkComponent
             href={APP_ROUTES.HOME}
-            color="inherit"
-            underline="hover"
-            sx={{ fontFamily: typography.fontFamily.sans }}
-          >
-            Home
-          </Link>
-          <Link
+            name="Home"
+          />
+          <LinkComponent
             href={APP_ROUTES.DASHBOARD}
-            color="inherit"
-            underline="hover"
-            sx={{ fontFamily: typography.fontFamily.sans }}
-          >
-            Dashboard
-          </Link>
-          <Link
+            name="Dashboard"
+          />
+          <LinkComponent
             href={APP_ROUTES.RECIPES}
-            color="inherit"
-            underline="hover"
-            sx={{ fontFamily: typography.fontFamily.sans }}
-          >
-            Recipes
-          </Link>
-          <Link
+            name="Recipes"
+          />
+          <LinkComponent
             href={APP_ROUTES.PANTRY}
-            color="inherit"
-            underline="hover"
-            sx={{ fontFamily: typography.fontFamily.sans }}
-          >
-            Pantry
-          </Link>
-          <Link
+            name="Pantry"
+          />
+          <LinkComponent
             href={APP_ROUTES.SHOPPING}
-            color="inherit"
-            underline="hover"
-            sx={{ fontFamily: typography.fontFamily.sans }}
-          >
-            Shopping List
-          </Link>
+            name="Shopping List"
+          />
         </Box>
 
         {/* Social Media Icons */}
@@ -120,7 +112,7 @@ const Footer: React.FC = () => {
           }}
         >
           <IconButton
-            href={process.env.NEXT_PUBLIC_FACEBOOK_URL}
+            href={process.env.NEXT_PUBLIC_FACEBOOK_URL || ''}
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Follow us on Facebook"
@@ -129,7 +121,7 @@ const Footer: React.FC = () => {
             <FacebookIcon />
           </IconButton>
           <IconButton
-            href={process.env.NEXT_PUBLIC_TWITTER_URL}
+            href={process.env.NEXT_PUBLIC_TWITTER_URL || ''}
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Follow us on Twitter"
@@ -138,7 +130,7 @@ const Footer: React.FC = () => {
             <TwitterIcon />
           </IconButton>
           <IconButton
-            href={process.env.NEXT_PUBLIC_INSTAGRAM_URL}
+            href={process.env.NEXT_PUBLIC_INSTAGRAM_URL || ''}
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Follow us on Instagram"

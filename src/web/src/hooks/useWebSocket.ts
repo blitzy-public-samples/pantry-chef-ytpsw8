@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'; // react ^18.0.0
 // Internal dependencies
 import { WebSocketService } from '../services/websocket.service';
 import { WEBSOCKET_CONFIG } from '../config/constants';
+import { EventListenerFunction } from '../interfaces/auth.interface';
 
 /**
  * HUMAN TASKS:
@@ -33,7 +34,7 @@ export const useWebSocket = (token: string) => {
   /**
    * Memoized subscribe method to prevent unnecessary re-renders
    */
-  const subscribe = useCallback((event: string, callback: Function) => {
+  const subscribe = useCallback((event: string, callback: EventListenerFunction) => {
     try {
       webSocketService.subscribe(event, callback);
     } catch (error) {
@@ -45,7 +46,7 @@ export const useWebSocket = (token: string) => {
   /**
    * Memoized unsubscribe method to prevent unnecessary re-renders
    */
-  const unsubscribe = useCallback((event: string, callback: Function) => {
+  const unsubscribe = useCallback((event: string, callback: EventListenerFunction) => {
     try {
       webSocketService.unsubscribe(event, callback);
     } catch (error) {

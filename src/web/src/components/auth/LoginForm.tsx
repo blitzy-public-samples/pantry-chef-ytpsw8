@@ -11,12 +11,14 @@ import { useForm } from 'react-hook-form'; // ^7.0.0
 import useAuth from '../../hooks/useAuth';
 import Button from '../common/Button';
 import Input from '../common/Input';
-
+import { useRouter } from 'next/router';
+import { APP_ROUTES } from '../../config/constants';
+// @version react-router-dom ^6.0.0
 /**
  * Props interface for the LoginForm component
  */
 interface LoginFormProps {
-  onSuccess: (user: User) => void;
+  onSuccess: () => void;
   className?: string;
 }
 
@@ -26,6 +28,7 @@ interface LoginFormProps {
 interface LoginFormData {
   email: string;
   password: string;
+  rememberMe: boolean;
 }
 
 /**
@@ -63,11 +66,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting }
-  } = useForm<LoginFormData>();
+    formState: { errors, isSubmitting },
+    setError,
+  } = useForm<LoginFormData>({
+    defaultValues: {
+      email: '',
+      password: '',
+      rememberMe: false
+    }
+  });
 
   // Get authentication methods from useAuth hook
-  const { login, loading, error } = useAuth();
+  const { login, loading, error, isAuthenticated } = useAuth();
+  const router = useRouter();
 
   /**
    * Handles form submission and JWT authentication
@@ -77,28 +88,43 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     try {
       await login({
         email: data.email,
-        password: data.password
+        password: data.password,
+        rememberMe: data.rememberMe,
       });
-      
+
       // Call onSuccess callback if login succeeds
       if (!error) {
-        onSuccess(data);
+        onSuccess();
       }
+
+      // Navigate to dashboard on success
+      router.push(APP_ROUTES.DASHBOARD);
     } catch (err) {
       // Error handling is managed by useAuth hook
       console.error('Login submission failed:', err);
+      setError('root', {
+        type: 'manual',
+        message: 'Authentication failed. Please check your credentials.'
+      });
     }
   };
 
+  // Redirect if already authenticated
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      router.push(APP_ROUTES.DASHBOARD);
+    }
+  }, [isAuthenticated, router]);
+
   return (
-    <form 
+    <form
       onSubmit={handleSubmit(onSubmit)}
       className={`w-full max-w-md space-y-6 ${className}`}
       noValidate
     >
       {/* Display authentication error if any */}
       {error && (
-        <div 
+        <div
           className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg"
           role="alert"
         >

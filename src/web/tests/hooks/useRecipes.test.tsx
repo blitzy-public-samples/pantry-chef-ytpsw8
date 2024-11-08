@@ -1,13 +1,12 @@
 // @version: @testing-library/react-hooks ^8.0.1
-import { renderHook, act } from '@testing-library/react-hooks';
+import { renderHook, act } from '@testing-library/react';
 // @version: @testing-library/react ^13.0.0
 import { act as reactAct } from '@testing-library/react';
 // @version: react-redux ^8.0.0
-import { Provider } from 'react-redux';
+import * as ReactRedux from 'react-redux';
 // @version: @reduxjs/toolkit ^1.9.5
 import { configureStore } from '@reduxjs/toolkit';
 // @version: jest ^29.0.0
-import { jest } from '@jest/globals';
 
 import useRecipes from '../../src/hooks/useRecipes';
 import { Recipe, RecipeDifficulty, RecipeFilter } from '../../src/interfaces/recipe.interface';
@@ -70,17 +69,17 @@ const mockStore = configureStore({
         case 'recipes/fetchRecipes/pending':
           return { ...state, loading: true };
         case 'recipes/fetchRecipes/fulfilled':
-          return { 
-            ...state, 
-            loading: false, 
+          return {
+            ...state,
+            loading: false,
             recipes: action.payload,
-            error: null 
+            error: null
           };
         case 'recipes/fetchRecipes/rejected':
-          return { 
-            ...state, 
-            loading: false, 
-            error: action.error.message 
+          return {
+            ...state,
+            loading: false,
+            error: action.error.message
           };
         case 'recipes/matchRecipesWithIngredients/fulfilled':
           return {
@@ -98,17 +97,23 @@ const mockStore = configureStore({
 
 // Mock dispatch function
 const mockDispatch = jest.fn();
-jest.mock('react-redux', () => ({
-  ...jest.requireActual('react-redux'),
-  useDispatch: () => mockDispatch
-}));
+jest.mock('react-redux', () => {
+  const originalModule = jest.requireActual('react-redux') as typeof ReactRedux;
+
+  return {
+    __esModule: true, // Use it when dealing with esModules
+    ...originalModule,
+    useDispatch: () => mockDispatch
+  };
+
+});
 
 describe('useRecipes hook', () => {
   // Test wrapper with Redux Provider
   const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <Provider store={mockStore}>
+    <ReactRedux.Provider store={mockStore}>
       {children}
-    </Provider>
+    </ReactRedux.Provider>
   );
 
   beforeEach(() => {
@@ -117,7 +122,7 @@ describe('useRecipes hook', () => {
 
   it('should fetch recipes successfully', async () => {
     // Test requirement: Recipe Discovery
-    mockDispatch.mockResolvedValueOnce({ payload: mockRecipes });
+    mockDispatch.mockReturnValue({ payload: mockRecipes });
 
     const { result } = renderHook(() => useRecipes(), { wrapper });
 
@@ -146,7 +151,7 @@ describe('useRecipes hook', () => {
   it('should handle recipe matching', async () => {
     // Test requirement: Smart Recipe Matching
     const matchedRecipes = mockRecipes;
-    mockDispatch.mockResolvedValueOnce({ payload: matchedRecipes });
+    mockDispatch.mockReturnValue({ payload: matchedRecipes });
 
     const { result } = renderHook(() => useRecipes(), { wrapper });
     const ingredientIds = ['ing1', 'ing2'];
@@ -167,7 +172,7 @@ describe('useRecipes hook', () => {
 
   it('should fetch recipe recommendations', async () => {
     // Test requirement: Recipe Recommendations
-    mockDispatch.mockResolvedValueOnce({ payload: mockRecipes });
+    mockDispatch.mockReturnValue({ payload: mockRecipes });
 
     const { result } = renderHook(() => useRecipes(), { wrapper });
 
@@ -199,7 +204,7 @@ describe('useRecipes hook', () => {
   it('should handle errors correctly', async () => {
     // Test error handling for recipe operations
     const errorMessage = 'Failed to fetch recipes';
-    mockDispatch.mockRejectedValueOnce(new Error(errorMessage));
+    mockDispatch.mockReturnValueOnce(new Error(errorMessage));
 
     const { result } = renderHook(() => useRecipes(), { wrapper });
     const filter: RecipeFilter = {
@@ -222,7 +227,7 @@ describe('useRecipes hook', () => {
   it('should fetch recipe details', async () => {
     // Test fetching individual recipe details
     const recipeId = '1';
-    mockDispatch.mockResolvedValueOnce({ payload: mockRecipes[0] });
+    mockDispatch.mockReturnValueOnce({ payload: mockRecipes[0] });
 
     const { result } = renderHook(() => useRecipes(), { wrapper });
 

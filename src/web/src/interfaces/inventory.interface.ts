@@ -27,9 +27,9 @@ export interface InventoryItem {
   storageLocation: StorageLocation;
   category: string;
   expirationDate: Date;
-  purchaseDate: Date;
-  notes: string;
-  imageUrl: string;
+  purchaseDate?: Date;
+  notes?: string;
+  imageUrl?: string;
 }
 
 /**

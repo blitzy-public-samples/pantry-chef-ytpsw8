@@ -2,7 +2,7 @@
  * HUMAN TASKS:
  * 1. Configure environment variables for authentication endpoints
  * 2. Set up proper image assets in public/assets/images
- * 3. Configure SEO meta tags in next.config.js
+ * 3. Configure SEO meta tags in next.config.ts
  * 4. Ensure proper font loading in _document.tsx
  */
 
@@ -12,6 +12,7 @@ import Image from 'next/image'; // ^13.0.0
 import MainLayout from '../components/layout/MainLayout';
 import { Button } from '../components/common/Button';
 import { useAuth } from '../hooks/useAuth';
+import { APP_ROUTES } from '../config/constants';
 
 /**
  * Landing page component for PantryChef web application
@@ -28,11 +29,12 @@ const HomePage: React.FC = () => {
    * Implements requirement: User Interface Design - Immediate access to core functionality
    */
   const handleGetStarted = (event: React.MouseEvent<HTMLButtonElement>) => {
-    router.push(isAuthenticated ? '/dashboard' : '/signup');
+    event.preventDefault()
+    router.push(isAuthenticated ? APP_ROUTES.DASHBOARD : APP_ROUTES.SIGNUP);
   };
 
   return (
-    <MainLayout className="bg-white">
+    <>
       {/* Hero Section */}
       <section className="min-h-[calc(100vh-64px)] flex flex-col justify-center items-center text-center px-6 py-12 md:px-12">
         <div className="max-w-4xl mx-auto">
@@ -50,13 +52,13 @@ const HomePage: React.FC = () => {
             >
               Get Started
             </Button>
-            <Button
+            {!isAuthenticated && <Button
               variant="outline"
               size="large"
-              onClick={() => router.push('/login')}
+              onClick={() => router.push(APP_ROUTES.LOGIN)}
             >
               Sign In
-            </Button>
+            </Button>}
           </div>
         </div>
       </section>
@@ -197,7 +199,7 @@ const HomePage: React.FC = () => {
           </Button>
         </div>
       </section>
-    </MainLayout>
+    </>
   );
 };
 

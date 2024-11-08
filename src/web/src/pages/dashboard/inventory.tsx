@@ -6,11 +6,10 @@
  * 4. Set up proper error tracking service integration
  */
 
-import React, { useCallback, useState } from 'react'; // ^18.0.0
+import React, { useCallback } from 'react'; // ^18.0.0
 import { NextPage } from 'next'; // ^13.0.0
-import MainLayout from '../../components/layout/MainLayout';
 import InventoryList from '../../components/pantry/InventoryList';
-import CategoryFilter from '../../components/pantry/CategoryFilter';
+import { CategoryFilter } from '../../components/pantry/CategoryFilter';
 import ExpirationTracker from '../../components/pantry/ExpirationTracker';
 import useInventory from '../../hooks/useInventory';
 import { InventoryItem } from '../../interfaces/inventory.interface';
@@ -19,7 +18,7 @@ import { InventoryItem } from '../../interfaces/inventory.interface';
  * Props interface for the Inventory page component
  * Requirement: Digital Pantry Management - Comprehensive inventory management
  */
-interface InventoryPageProps {}
+interface InventoryPageProps { }
 
 /**
  * Main inventory dashboard page component
@@ -82,14 +81,14 @@ const InventoryPage: NextPage<InventoryPageProps> = () => {
   }, [deleteItem]);
 
   return (
-    <MainLayout>
+    <>
       <div className="space-y-6">
         {/* Page Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <h1 className="text-2xl font-semibold text-gray-900">
             Pantry Inventory
           </h1>
-          
+
           {/* Category Filter Section */}
           <div className="w-full md:w-64">
             <CategoryFilter
@@ -97,6 +96,7 @@ const InventoryPage: NextPage<InventoryPageProps> = () => {
               onCategoryChange={handleCategoryChange}
               disabled={loading}
               className="w-full"
+              availableCategories={[]}
             />
           </div>
         </div>
@@ -110,7 +110,7 @@ const InventoryPage: NextPage<InventoryPageProps> = () => {
         </div>
 
         {/* Main Inventory List Section */}
-        <div className="bg-white rounded-lg shadow-sm">
+        <div className="bg-white rounded-lg shadow-sm p-6">
           <InventoryList
             filter={filter}
             onItemUpdate={handleItemUpdate}
@@ -118,7 +118,7 @@ const InventoryPage: NextPage<InventoryPageProps> = () => {
           />
         </div>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

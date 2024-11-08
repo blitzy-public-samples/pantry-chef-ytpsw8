@@ -9,7 +9,7 @@
 
 // External dependencies
 // @version: react ^18.0.0
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 // @version: next/head ^13.0.0
 import Head from 'next/head';
 import { GetServerSideProps, NextPage } from 'next';
@@ -20,13 +20,19 @@ import AnalyticsChart from '../../components/analytics/AnalyticsChart';
 import InventoryStats from '../../components/analytics/InventoryStats';
 import UsageMetrics from '../../components/analytics/UsageMetrics';
 import { DateRange, AnalyticsMetrics } from '../../interfaces/analytics.interface';
+import { init } from 'next/dist/compiled/webpack/webpack';
+import Card from '../../components/common/Card';
+import theme from '../../config/theme';
 
 /**
  * Props interface for the Analytics Dashboard page
  * Requirement: Analytics and Reporting (1.1 System Overview/System Architecture)
  */
 interface AnalyticsDashboardProps {
-  initialDateRange?: DateRange;
+  initialDateRange?: {
+    startDate: string,
+    endDate: string,
+  };
 }
 
 /**
@@ -38,7 +44,7 @@ interface AnalyticsDashboardProps {
 const AnalyticsDashboard: NextPage<AnalyticsDashboardProps> = ({ initialDateRange }) => {
   // State management for date range and metrics
   const [dateRange, setDateRange] = useState<DateRange>(
-    initialDateRange || {
+    initialDateRange ? { startDate: new Date(initialDateRange.startDate), endDate: new Date(initialDateRange.endDate) } : {
       startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
       endDate: new Date()
     }
@@ -58,10 +64,10 @@ const AnalyticsDashboard: NextPage<AnalyticsDashboardProps> = ({ initialDateRang
    * Handler for metrics data loading
    * Requirement: System Metrics - Display of performance metrics
    */
-  const handleMetricsLoad = (newMetrics: AnalyticsMetrics) => {
+  const handleMetricsLoad = useCallback((newMetrics: AnalyticsMetrics) => {
     setMetrics(newMetrics);
     setIsLoading(false);
-  };
+  }, []);
 
   return (
     <>
@@ -70,7 +76,7 @@ const AnalyticsDashboard: NextPage<AnalyticsDashboardProps> = ({ initialDateRang
         <meta name="description" content="Comprehensive analytics and metrics for PantryChef" />
       </Head>
 
-      <MainLayout>
+      <>
         <div className="container mx-auto px-4 py-8">
           {/* Page Header */}
           <div className="mb-8">
@@ -94,7 +100,7 @@ const AnalyticsDashboard: NextPage<AnalyticsDashboardProps> = ({ initialDateRang
           <section className="mb-12">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">User Activity</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {metrics && (
+              {metrics ? (
                 <>
                   {/* Active Users Trend */}
                   <div className="bg-white rounded-lg shadow-sm p-6">
@@ -105,7 +111,6 @@ const AnalyticsDashboard: NextPage<AnalyticsDashboardProps> = ({ initialDateRang
                       chartConfig={{
                         height: 300,
                         showLegend: true,
-                        colors: ['#8884d8', '#82ca9d']
                       }}
                     />
                   </div>
@@ -119,12 +124,16 @@ const AnalyticsDashboard: NextPage<AnalyticsDashboardProps> = ({ initialDateRang
                       chartConfig={{
                         height: 300,
                         showLegend: true,
-                        colors: ['#ffc658', '#ff7300', '#00C49F']
                       }}
                     />
                   </div>
                 </>
-              )}
+              ) : (
+                <Card className="p-4">
+                  <p className="text-gray-500">No metrics data available</p>
+                </Card>
+              )
+              }
             </div>
           </section>
 
@@ -137,7 +146,7 @@ const AnalyticsDashboard: NextPage<AnalyticsDashboardProps> = ({ initialDateRang
             />
           </section>
         </div>
-      </MainLayout>
+      </>
     </>
   );
 };
@@ -173,13 +182,15 @@ export const getServerSideProps: GetServerSideProps<AnalyticsDashboardProps> = a
         }
       }
     };
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Error in getServerSideProps:', error);
     return {
       redirect: {
         destination: '/error',
         permanent: false,
-      }
+      },
+
     };
   }
 };

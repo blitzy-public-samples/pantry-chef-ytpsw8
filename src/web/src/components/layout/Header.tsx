@@ -6,7 +6,7 @@
  * 4. Configure CDN for logo and static assets
  */
 
-import React, { useCallback } from 'react'; // ^18.0.0
+import React, { useCallback, useState } from 'react'; // ^18.0.0
 import Link from 'next/link'; // ^13.0.0
 import { useRouter } from 'next/router'; // ^13.0.0
 import { Button } from '../common/Button';
@@ -28,9 +28,10 @@ interface HeaderProps {
  * - User Interface Design: Header component with quick actions
  * - Authentication Flow: User authentication state management
  */
-export const Header: React.FC<HeaderProps> = ({ className }) => {
+const Header: React.FC<HeaderProps> = ({ className }) => {
   const router = useRouter();
   const { isAuthenticated, user, logout } = useAuth();
+  const [isMobileMenuOpen, setMobileMenu] = useState<boolean>(false);
 
   /**
    * Handles user logout and redirects to home page
@@ -45,6 +46,10 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
     }
   }, [logout, router]);
 
+  const toggleMobileMenu = () => {
+    setMobileMenu(!isMobileMenuOpen);
+  }
+
   /**
    * Renders authentication-related buttons based on auth state
    * Implements requirement: User Interface Design - Quick actions and user profile management
@@ -54,7 +59,7 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
       return (
         <div className="flex items-center space-x-4">
           <span className="hidden md:inline-block text-gray-700">
-            Welcome, {user.name}
+            Welcome, {user.firstName}
           </span>
           <Button
             variant="outline"
@@ -70,12 +75,12 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
 
     return (
       <div className="flex items-center space-x-2">
-        <Link href={APP_ROUTES.LOGIN} passHref>
-          <Button variant="outline" size="small" className="text-sm">
+        <Link href={APP_ROUTES.LOGIN} className='flex self-stretch'>
+          <Button variant="outline" size="small" className="text-sm" >
             Login
           </Button>
         </Link>
-        <Link href={APP_ROUTES.SIGNUP} passHref>
+        <Link href={APP_ROUTES.SIGNUP} className='flex self-stretch'>
           <Button variant="primary" size="small" className="text-sm">
             Sign Up
           </Button>
@@ -121,14 +126,15 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
         {/* Authentication Section */}
         <div className="flex items-center">
           {renderAuthButtons()}
-          
-          {/* Mobile Menu Button */}
+
+          {/* Mobile Menu Button*/}
           <button
             className="md:hidden ml-4 p-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
             aria-label="Toggle mobile menu"
+            onClick={toggleMobileMenu}
           >
             <svg
-              className="h-6 w-6 text-gray-600"
+              className={`h-6 w-6 ${isMobileMenuOpen ? 'text-primary-600' : 'text-gray-600'}`}
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -143,30 +149,54 @@ export const Header: React.FC<HeaderProps> = ({ className }) => {
       </div>
 
       {/* Mobile Navigation Menu - Hidden by default */}
-      <nav className="md:hidden hidden bg-white border-t">
+      {isMobileMenuOpen && <nav className="md:hidden bg-white border-t">
         {isAuthenticated && (
           <div className="px-4 py-2 space-y-1">
             <Link
               href={APP_ROUTES.DASHBOARD}
               className="block px-3 py-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              onClick={() => setMobileMenu(false)}
             >
               Dashboard
             </Link>
             <Link
               href={APP_ROUTES.RECIPES}
               className="block px-3 py-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              onClick={() => setMobileMenu(false)}
             >
               Recipes
             </Link>
             <Link
               href={APP_ROUTES.PANTRY}
               className="block px-3 py-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              onClick={() => setMobileMenu(false)}
             >
               Pantry
             </Link>
+            <Link
+              href={APP_ROUTES.SHOPPING}
+              className="block px-3 py-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              onClick={() => setMobileMenu(false)}
+            >
+              Shopping List
+            </Link>
+            <Link
+              href={APP_ROUTES.ANALYTICS}
+              className="block px-3 py-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              onClick={() => setMobileMenu(false)}
+            >
+              Analytics
+            </Link>
+            <Link
+              href={APP_ROUTES.SETTINGS}
+              className="block px-3 py-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              onClick={() => setMobileMenu(false)}
+            >
+              Settings
+            </Link>
           </div>
         )}
-      </nav>
+      </nav>}
     </header>
   );
 };

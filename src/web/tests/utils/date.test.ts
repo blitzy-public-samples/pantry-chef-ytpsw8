@@ -1,5 +1,5 @@
 // @jest version: ^29.0.0
-import { describe, it, expect } from 'jest';
+
 import {
   formatDate,
   calculateDaysUntilExpiration,

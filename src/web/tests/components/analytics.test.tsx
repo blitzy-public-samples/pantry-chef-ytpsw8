@@ -11,7 +11,6 @@ import React from 'react';
 // @version: @testing-library/react ^13.0.0
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 // @version: @jest/globals ^29.0.0
-import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 
 // Internal dependencies
 import AnalyticsChart from '../../src/components/analytics/AnalyticsChart';
@@ -140,7 +139,7 @@ describe('AnalyticsChart Component', () => {
     render(
       <AnalyticsChart
         chartType="line"
-        data={{ ...mockAnalyticsData, totalUsers: undefined }}
+        data={{ ...mockAnalyticsData, totalUsers: 0 }}
         title="Loading Chart"
       />
     );
@@ -200,8 +199,8 @@ describe('InventoryStats Component', () => {
 
   test('handles error states appropriately', async () => {
     const mockError = new Error('Failed to fetch inventory stats');
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-    
+    jest.spyOn(console, 'error').mockImplementation(() => { });
+
     const { analyticsService } = require('../../src/services/analytics.service');
     analyticsService.getMetrics.mockRejectedValueOnce(mockError);
 

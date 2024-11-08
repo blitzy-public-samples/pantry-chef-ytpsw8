@@ -65,9 +65,9 @@ export const Table: React.FC<TableProps> = ({
   const handleSort = (column: Column) => {
     if (!column.sortable || !onSort) return;
 
-    const newDirection = 
-      sortState.key === column.key && sortState.direction === 'asc' 
-        ? 'desc' 
+    const newDirection =
+      sortState.key === column.key && sortState.direction === 'asc'
+        ? 'desc'
         : 'asc';
 
     setSortState({
@@ -113,14 +113,14 @@ export const Table: React.FC<TableProps> = ({
     }
 
     return (
-      <table className="table">
-        <thead className="table-header">
+      <table className="table-auto min-w-full divide-y divide-slate-300">
+        <thead className="bg-primary-50">
           <tr>
-            {columns.map((column) => (
+            {columns.map((column, index) => (
               <th
                 key={column.key}
                 className={classnames(
-                  'table-header-cell',
+                  `py-3 ${index === 0 ? 'pl-8' : 'pl-0'} ${index === columns.length - 1 ? 'pr-8' : 'pr-0'} text-left`,
                   { sortable: column.sortable }
                 )}
                 onClick={() => handleSort(column)}
@@ -134,12 +134,12 @@ export const Table: React.FC<TableProps> = ({
             ))}
           </tr>
         </thead>
-        <tbody className="table-body">
+        <tbody className='divide-y divide-slate-200 bg-white'>
           {data.map((row, rowIndex) => (
             <tr key={rowIndex}>
-              {columns.map((column) => (
-                <td key={`${rowIndex}-${column.key}`} className="table-body-cell">
-                  {column.render 
+              {columns.map((column, index) => (
+                <td key={`${rowIndex}-${column.key}`} className={`py-3 ${index === 0 ? 'pl-8' : 'pl-0'} ${index === columns.length - 1 ? 'pr-8' : 'pr-0'} text-left`}>
+                  {column.render
                     ? column.render(row[column.key], row)
                     : row[column.key]}
                 </td>

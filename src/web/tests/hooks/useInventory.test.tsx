@@ -4,7 +4,8 @@
 // @version @reduxjs/toolkit ^1.9.0
 // @version jest ^29.0.0
 
-import { renderHook, act } from '@testing-library/react-hooks';
+import React from 'react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import useInventory from '../../src/hooks/useInventory';
@@ -71,7 +72,7 @@ describe('useInventory', () => {
 
     // Create wrapper with Redux Provider
     wrapper = ({ children }: { children: React.ReactNode }) => (
-      <Provider store={store}>{children}</Provider>
+      <Provider store={store} > {children} </Provider>
     );
   });
 
@@ -99,9 +100,10 @@ describe('useInventory', () => {
   it('should fetch inventory items with filters', async () => {
     // Requirement: Inventory Tracking - Filtered inventory retrieval
     const mockItems = [{ ...mockInventoryItem, id: 'item-1' }];
+
     store.dispatch = jest.fn().mockResolvedValue({ payload: mockItems });
 
-    const { result, waitForNextUpdate } = renderHook(
+    const { result } = renderHook(
       () => useInventory({
         categories: ['test-category'],
         locations: [StorageLocation.PANTRY],
@@ -111,7 +113,7 @@ describe('useInventory', () => {
       { wrapper }
     );
 
-    await waitForNextUpdate();
+    await waitFor(() => expect(result.current));
 
     expect(store.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -124,7 +126,7 @@ describe('useInventory', () => {
   // Test item operations
   it('should handle item operations', async () => {
     // Requirement: Digital Pantry Management - CRUD operations
-    const { result, waitForNextUpdate } = renderHook(
+    const { result } = renderHook(
       () => useInventory({
         categories: [],
         locations: [],
@@ -172,9 +174,10 @@ describe('useInventory', () => {
   it('should track expiring items', async () => {
     // Requirement: Expiration Management - Expiration alerts
     const mockAlerts = [mockExpirationAlert];
+
     store.dispatch = jest.fn().mockResolvedValue({ payload: mockAlerts });
 
-    const { result, waitForNextUpdate } = renderHook(
+    const { result } = renderHook(
       () => useInventory({
         categories: [],
         locations: [],
@@ -184,7 +187,7 @@ describe('useInventory', () => {
       { wrapper }
     );
 
-    await waitForNextUpdate();
+    await waitFor(() => expect(result.current));
 
     // Verify expiration alerts are fetched
     expect(store.dispatch).toHaveBeenCalledWith(
@@ -208,9 +211,10 @@ describe('useInventory', () => {
   // Test error handling
   it('should handle errors gracefully', async () => {
     const errorMessage = 'Failed to fetch inventory';
+
     store.dispatch = jest.fn().mockRejectedValue(new Error(errorMessage));
 
-    const { result, waitForNextUpdate } = renderHook(
+    const { result } = renderHook(
       () => useInventory({
         categories: [],
         locations: [],
@@ -220,7 +224,7 @@ describe('useInventory', () => {
       { wrapper }
     );
 
-    await waitForNextUpdate();
+    await waitFor(() => expect(result.current));
 
     expect(result.current.error).toBe(errorMessage);
     expect(result.current.loading).toBe(false);
@@ -228,7 +232,7 @@ describe('useInventory', () => {
 
   // Test filter updates
   it('should update filters and refresh inventory', async () => {
-    const { result, waitForNextUpdate } = renderHook(
+    const { result } = renderHook(
       () => useInventory({
         categories: [],
         locations: [],
@@ -275,9 +279,9 @@ describe('useInventory', () => {
 
     jest.useFakeTimers();
     const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
-    
+
     unmount();
-    
+
     expect(clearIntervalSpy).toHaveBeenCalled();
     jest.useRealTimers();
   });

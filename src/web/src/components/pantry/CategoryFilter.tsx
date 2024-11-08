@@ -70,5 +70,3 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
   );
 };
 
-// Export the props interface for external use
-export type { CategoryFilterProps };

@@ -71,7 +71,7 @@ const Card: React.FC<CardProps> = ({
   );
 
   return (
-    <div 
+    <div
       className={cardClasses}
       onClick={onClick}
       style={{
@@ -84,28 +84,27 @@ const Card: React.FC<CardProps> = ({
 };
 
 export default Card;
-```
 
-This implementation:
+// This implementation:
 
-1. Creates a reusable Card component following Material Design principles
-2. Implements the specified CardProps interface with all required properties
-3. Uses the theme configuration for consistent shadows, border radius, and spacing
-4. Provides customizable elevation and padding through props
-5. Supports interactive cards with hover effects when onClick is provided
-6. Uses classnames utility for conditional class construction
-7. Implements responsive design through Tailwind CSS classes
-8. Follows the technical specification requirements for UI components
-9. Includes proper TypeScript typing and React 18 compatibility
-10. Uses relative imports for the theme configuration
-11. Includes version comments for external dependencies
-12. Lists human tasks for proper setup and configuration
+// 1. Creates a reusable Card component following Material Design principles
+// 2. Implements the specified CardProps interface with all required properties
+// 3. Uses the theme configuration for consistent shadows, border radius, and spacing
+// 4. Provides customizable elevation and padding through props
+// 5. Supports interactive cards with hover effects when onClick is provided
+// 6. Uses classnames utility for conditional class construction
+// 7. Implements responsive design through Tailwind CSS classes
+// 8. Follows the technical specification requirements for UI components
+// 9. Includes proper TypeScript typing and React 18 compatibility
+// 10. Uses relative imports for the theme configuration
+// 11. Includes version comments for external dependencies
+// 12. Lists human tasks for proper setup and configuration
 
-The component can be used as shown in the usage examples from the specification:
+// The component can be used as shown in the usage examples from the specification:
 
-```tsx
-<Card>Content</Card>
-<Card elevation="md">Content</Card>
-<Card padding="lg">Content</Card>
-<Card onClick={() => handleClick()}>Clickable Card</Card>
-<Card className="custom-card">Content</Card>
+
+// <Card>Content</Card>
+// <Card elevation="md">Content</Card>
+// <Card padding="lg">Content</Card>
+// <Card onClick={() => handleClick()}>Clickable Card</Card>
+// <Card className="custom-card">Content</Card>

@@ -3,10 +3,12 @@
 // @version react-redux ^8.0.0
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { jest, describe, it, beforeEach, expect } from '@jest/globals';
 import { Provider } from 'react-redux';
 import LoginPage from '../../src/pages/login';
 import { useAuth } from '../../src/hooks/useAuth';
+import React from 'react';
+import { configureStore } from '@reduxjs/toolkit';
+import { APP_ROUTES } from '../../src/config/constants';
 
 // Mock Next.js router
 jest.mock('next/router', () => ({
@@ -24,9 +26,17 @@ jest.mock('../../src/hooks/useAuth', () => ({
 // Constants for testing
 const TEST_EMAIL = 'test@example.com';
 const TEST_PASSWORD = 'password123';
-const DASHBOARD_ROUTE = '/dashboard';
+const DASHBOARD_ROUTE = APP_ROUTES.DASHBOARD;
 const TEST_JWT = 'mock.jwt.token';
 
+
+const createMockStore = () => {
+  return configureStore({
+    reducer: {
+      auth: (state = {}, action) => state,
+    },
+  });
+};
 /**
  * Test suite for login page component with JWT authentication
  * Addresses requirements:
@@ -36,11 +46,7 @@ const TEST_JWT = 'mock.jwt.token';
  */
 describe('LoginPage', () => {
   // Mock store setup for Redux Provider
-  const mockStore = {
-    getState: () => ({}),
-    subscribe: jest.fn(),
-    dispatch: jest.fn()
-  };
+  const mockStore = createMockStore();
 
   // Mock auth hook implementation
   const mockAuthHook = {
@@ -54,7 +60,7 @@ describe('LoginPage', () => {
   beforeEach(() => {
     // Reset all mocks before each test
     jest.clearAllMocks();
-    
+
     // Setup default auth hook mock
     (useAuth as jest.Mock).mockImplementation(() => mockAuthHook);
   });
@@ -72,22 +78,22 @@ describe('LoginPage', () => {
 
     // Verify form header
     expect(screen.getByText(/Welcome to PantryChef/i)).toBeInTheDocument();
-    
+
     // Verify email input with Material Design styling
     const emailInput = screen.getByLabelText(/email/i);
     expect(emailInput).toBeInTheDocument();
     expect(emailInput).toHaveClass('md-input'); // Material Design class
-    
+
     // Verify password input with Material Design styling
     const passwordInput = screen.getByLabelText(/password/i);
     expect(passwordInput).toBeInTheDocument();
     expect(passwordInput).toHaveClass('md-input'); // Material Design class
-    
+
     // Verify submit button with Material Design styling
     const submitButton = screen.getByRole('button', { name: /sign in/i });
     expect(submitButton).toBeInTheDocument();
     expect(submitButton).toHaveClass('md-button'); // Material Design class
-    
+
     // Verify form layout matches Material Design specifications
     const form = screen.getByRole('form');
     expect(form).toHaveClass('space-y-6'); // Material Design spacing

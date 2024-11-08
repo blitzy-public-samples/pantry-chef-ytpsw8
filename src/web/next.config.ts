@@ -1,4 +1,4 @@
-// @ts-check
+//@ts-check
 
 // External dependency: Bundle analyzer version ^13.0.0
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
@@ -6,7 +6,7 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 });
 
 // Import API configuration constants
-const { BASE_URL } = require('./src/config/constants');
+const { API_CONFIG } = require('./src/config/constants');
 
 /**
  * HUMAN TASKS:
@@ -19,7 +19,7 @@ const { BASE_URL } = require('./src/config/constants');
 
 // Requirement: Frontend Stack - Next.js configuration with optimization settings
 const nextConfig = {
-  reactStrictMode: true,
+  reactStrictMode: false,
   poweredByHeader: false,
 
   // Requirement: CDN Configuration - Asset optimization and CloudFront setup
@@ -43,12 +43,13 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; " +
-                   "script-src 'self' 'unsafe-eval' 'unsafe-inline'; " +
-                   "style-src 'self' 'unsafe-inline'; " +
-                   "img-src 'self' data: https://*.pantrychef.com https://*.amazonaws.com; " +
-                   "font-src 'self'; " +
-                   "connect-src 'self' https://*.pantrychef.com wss://*.pantrychef.com"
+            value:
+              // "default-src 'self'; " + // uncomment
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline'; " +
+              "style-src 'self' 'unsafe-inline'; " +
+              // "img-src 'self' data: https://*.pantrychef.com https://*.amazonaws.com; " + // uncomment
+              "font-src 'self'; " +
+              "connect-src 'self' https://*.pantrychef.com wss://*.pantrychef.com"
           },
           {
             key: 'X-Frame-Options',
@@ -77,63 +78,64 @@ const nextConfig = {
 
   // Environment variables configuration
   env: {
-    NEXT_PUBLIC_API_URL: BASE_URL,
+    NEXT_PUBLIC_API_URL: API_CONFIG.BASE_URL,
     NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
     NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN
   },
 
   // Requirement: Frontend Stack - Webpack configuration with optimizations
-  webpack: (config, { dev, isServer }) => {
-    // Enable code splitting
-    config.optimization.splitChunks = {
-      chunks: 'all',
-      minSize: 20000,
-      maxSize: 244000,
-      minChunks: 1,
-      maxAsyncRequests: 30,
-      maxInitialRequests: 30,
-      cacheGroups: {
-        defaultVendors: {
-          test: /[\\/]node_modules[\\/]/,
-          priority: -10,
-          reuseExistingChunk: true
-        },
-        default: {
-          minChunks: 2,
-          priority: -20,
-          reuseExistingChunk: true
-        }
-      }
-    };
+  //---webpack config break routing with next/link and tailwind --//
+  // webpack: (config, { dev, isServer }) => {
+  //   // Enable code splitting
+  //   config.optimization.splitChunks = {
+  //     chunks: 'all',
+  //     minSize: 20000,
+  //     maxSize: 244000,
+  //     minChunks: 1,
+  //     maxAsyncRequests: 30,
+  //     maxInitialRequests: 30,
+  //     cacheGroups: {
+  //       defaultVendors: {
+  //         test: /[\\/]node_modules[\\/]/,
+  //         priority: -10,
+  //         reuseExistingChunk: true
+  //       },
+  //       default: {
+  //         minChunks: 2,
+  //         priority: -20,
+  //         reuseExistingChunk: true
+  //       }
+  //     }
+  //   };
 
-    // Enable production optimizations
-    if (!dev) {
-      config.optimization.minimize = true;
-    }
+  //   // Enable production optimizations
+  //   if (!dev) {
+  //     config.optimization.minimize = true;
+  //   }
 
-    // Add custom webpack rules
-    config.module.rules.push(
-      // TypeScript/JavaScript processing
-      {
-        test: /\.(ts|js)x?$/,
-        exclude: /node_modules/,
-        use: {
-          loader: 'babel-loader',
-          options: {
-            presets: ['next/babel']
-          }
-        }
-      },
-      // CSS/SASS processing
-      {
-        test: /\.scss$/,
-        use: ['style-loader', 'css-loader', 'sass-loader']
-      }
-    );
+  //   // Add custom webpack rules
+  //   config.module.rules.push(
+  //     // TypeScript/JavaScript processing
+  //     {
+  //       test: /\.(ts|js)x?$/,
+  //       exclude: /node_modules/,
+  //       use: {
+  //         loader: 'babel-loader',
+  //         options: {
+  //           presets: ['next/babel']
+  //         }
+  //       }
+  //     },
+  //     // CSS/SASS processing
+  //     // {
+  //     //   test: /\.(sass|less|css)$/,
+  //     //   use: ['style-loader', 'css-loader', 'sass-loader']
+  //     // }
+  //   );
 
-    return config;
-  },
+  //   return config;
+  // },
 
   // Enable TypeScript strict mode
   typescript: {

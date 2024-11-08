@@ -5,6 +5,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 // Internal dependencies
 import { API_ENDPOINTS, API_CONFIG } from '../config/api';
 import { AuthResponse } from '../interfaces/auth.interface';
+import { APP_ROUTES } from '../config/constants';
 
 // Global constants for token storage and configuration
 const TOKEN_STORAGE_KEY = 'auth_token';
@@ -45,10 +46,11 @@ const createApiClient = (): AxiosInstance => {
     (response) => response,
     async (error: AxiosError) => {
       const originalRequest = error.config;
-      
+
       // Handle token expiration and refresh
-      if (error.response?.status === 401 && !originalRequest?._retry) {
-        originalRequest._retry = true;
+
+      // prevent endless retry?
+      if (originalRequest && error.response?.status === 401) {
         try {
           const newTokens = await refreshAuthToken();
           localStorage.setItem(TOKEN_STORAGE_KEY, newTokens.token);
@@ -58,7 +60,7 @@ const createApiClient = (): AxiosInstance => {
         } catch (refreshError) {
           localStorage.removeItem(TOKEN_STORAGE_KEY);
           localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
-          window.location.href = '/login';
+          window.location.href = APP_ROUTES.LOGIN;
           return Promise.reject(refreshError);
         }
       }

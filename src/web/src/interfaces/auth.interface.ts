@@ -99,3 +99,5 @@ export interface SessionData {
     expiresAt: number;
     provider: AuthProvider;
 }
+
+export type EventListenerFunction = (...args: any[]) => void | Promise<void>;

@@ -1,6 +1,5 @@
 import React from 'react';
 import { render, fireEvent, waitFor, screen } from '@testing-library/react'; // ^14.0.0
-import { describe, test, expect, jest, beforeEach } from '@jest/globals'; // ^29.0.0
 import { InventoryList } from '../../src/components/pantry/InventoryList';
 import { CategoryFilter } from '../../src/components/pantry/CategoryFilter';
 import { ExpirationTracker } from '../../src/components/pantry/ExpirationTracker';
@@ -36,9 +35,9 @@ const mockInventoryData = (): InventoryItem[] => [
 ];
 
 const mockCategoryData = () => [
-  { id: '1', name: 'Dairy' },
-  { id: '2', name: 'Bakery' },
-  { id: '3', name: 'Produce' }
+  { id: '1', name: 'Dairy', description: '', iconUrl: '' },
+  { id: '2', name: 'Bakery', description: '', iconUrl: '' },
+  { id: '3', name: 'Produce', description: '', iconUrl: '' }
 ];
 
 describe('InventoryList', () => {
@@ -47,7 +46,8 @@ describe('InventoryList', () => {
     const mockItems = mockInventoryData();
     const mockOnItemUpdate = jest.fn();
     const mockOnItemDelete = jest.fn();
-    
+    const useInventory = jest.fn();
+
     (useInventory as jest.Mock).mockReturnValue({
       items: mockItems,
       loading: false,
@@ -57,7 +57,7 @@ describe('InventoryList', () => {
 
     render(
       <InventoryList
-        filter={{ categories: [], locations: [], searchTerm: '' }}
+        filter={{ categories: [], locations: [], searchTerm: '', expiringWithinDays: 1 }}
         onItemUpdate={mockOnItemUpdate}
         onItemDelete={mockOnItemDelete}
       />
@@ -73,7 +73,8 @@ describe('InventoryList', () => {
     const mockItems = mockInventoryData();
     const mockOnItemUpdate = jest.fn().mockResolvedValue(undefined);
     const mockUpdateItem = jest.fn().mockResolvedValue(undefined);
-    
+    const useInventory = jest.fn();
+
     (useInventory as jest.Mock).mockReturnValue({
       items: mockItems,
       loading: false,
@@ -83,7 +84,7 @@ describe('InventoryList', () => {
 
     render(
       <InventoryList
-        filter={{ categories: [], locations: [], searchTerm: '' }}
+        filter={{ categories: [], locations: [], searchTerm: '', expiringWithinDays: 1 }}
         onItemUpdate={mockOnItemUpdate}
         onItemDelete={jest.fn()}
       />
@@ -92,7 +93,7 @@ describe('InventoryList', () => {
     // Click edit button and verify update
     const editButtons = screen.getAllByText('Edit');
     fireEvent.click(editButtons[0]);
-    
+
     await waitFor(() => {
       expect(mockUpdateItem).toHaveBeenCalledWith('1', mockItems[0]);
       expect(mockOnItemUpdate).toHaveBeenCalledWith(mockItems[0]);
@@ -104,7 +105,8 @@ describe('InventoryList', () => {
     const mockItems = mockInventoryData();
     const mockOnItemDelete = jest.fn().mockResolvedValue(undefined);
     const mockDeleteItem = jest.fn().mockResolvedValue(undefined);
-    
+    const useInventory = jest.fn();
+
     (useInventory as jest.Mock).mockReturnValue({
       items: mockItems,
       loading: false,
@@ -116,7 +118,7 @@ describe('InventoryList', () => {
 
     render(
       <InventoryList
-        filter={{ categories: [], locations: [], searchTerm: '' }}
+        filter={{ categories: [], locations: [], searchTerm: '', expiringWithinDays: 1 }}
         onItemUpdate={jest.fn()}
         onItemDelete={mockOnItemDelete}
       />
@@ -125,7 +127,7 @@ describe('InventoryList', () => {
     // Click delete button and verify deletion
     const deleteButtons = screen.getAllByText('Delete');
     fireEvent.click(deleteButtons[0]);
-    
+
     await waitFor(() => {
       expect(mockDeleteItem).toHaveBeenCalledWith('1');
       expect(mockOnItemDelete).toHaveBeenCalledWith('1');
@@ -134,6 +136,8 @@ describe('InventoryList', () => {
 
   // Test: Inventory Management - Loading state
   test('should display loading state with Material Design spinner', () => {
+    const useInventory = jest.fn();
+
     (useInventory as jest.Mock).mockReturnValue({
       items: [],
       loading: true,
@@ -143,7 +147,7 @@ describe('InventoryList', () => {
 
     render(
       <InventoryList
-        filter={{ categories: [], locations: [], searchTerm: '' }}
+        filter={{ categories: [], locations: [], searchTerm: '', expiringWithinDays: 1, }}
         onItemUpdate={jest.fn()}
         onItemDelete={jest.fn()}
       />
@@ -158,7 +162,7 @@ describe('CategoryFilter', () => {
   test('should render categories with proper InventoryCategory interface', () => {
     const categories = mockCategoryData();
     const selectedCategories: string[] = [];
-    
+
     render(
       <CategoryFilter
         selectedCategories={selectedCategories}
@@ -176,7 +180,7 @@ describe('CategoryFilter', () => {
     const categories = mockCategoryData();
     const selectedCategories: string[] = [];
     const handleChange = jest.fn();
-    
+
     render(
       <CategoryFilter
         selectedCategories={selectedCategories}
@@ -187,7 +191,7 @@ describe('CategoryFilter', () => {
 
     const dropdown = screen.getByRole('combobox');
     fireEvent.change(dropdown, { target: { value: '1' } });
-    
+
     await waitFor(() => {
       expect(handleChange).toHaveBeenCalledWith(['1']);
     });
@@ -198,7 +202,7 @@ describe('CategoryFilter', () => {
     const categories = mockCategoryData();
     const selectedCategories = ['1'];
     const handleChange = jest.fn();
-    
+
     render(
       <CategoryFilter
         selectedCategories={selectedCategories}
@@ -209,7 +213,7 @@ describe('CategoryFilter', () => {
 
     const dropdown = screen.getByRole('combobox');
     fireEvent.change(dropdown, { target: { value: '2' } });
-    
+
     await waitFor(() => {
       expect(handleChange).toHaveBeenCalledWith(['1', '2']);
     });
@@ -218,7 +222,7 @@ describe('CategoryFilter', () => {
   // Test: Inventory Management - Disabled state
   test('should respect disabled state for user interactions', () => {
     const categories = mockCategoryData();
-    
+
     render(
       <CategoryFilter
         selectedCategories={[]}
@@ -237,7 +241,8 @@ describe('ExpirationTracker', () => {
   // Test: Food Waste Reduction - Expiring items display
   test('should display expiring items with proper date formatting', async () => {
     const mockItems = mockInventoryData();
-    
+    const useInventory = jest.fn();
+
     (useInventory as jest.Mock).mockReturnValue({
       items: mockItems,
       loading: false
@@ -253,7 +258,8 @@ describe('ExpirationTracker', () => {
   // Test: Digital Pantry Management - Days threshold
   test('should respect daysThreshold setting for alerts', () => {
     const mockItems = mockInventoryData();
-    
+    const useInventory = jest.fn();
+
     (useInventory as jest.Mock).mockReturnValue({
       items: mockItems,
       loading: false
@@ -272,7 +278,8 @@ describe('ExpirationTracker', () => {
   // Test: Food Waste Reduction - Sorting
   test('should sort items by expiration date correctly', () => {
     const mockItems = mockInventoryData();
-    
+    const useInventory = jest.fn();
+
     (useInventory as jest.Mock).mockReturnValue({
       items: mockItems,
       loading: false
@@ -293,7 +300,8 @@ describe('ExpirationTracker', () => {
         expirationDate: new Date(Date.now() - 86400000) // Yesterday
       }
     ];
-    
+    const useInventory = jest.fn();
+
     (useInventory as jest.Mock).mockReturnValue({
       items: mockItems,
       loading: false

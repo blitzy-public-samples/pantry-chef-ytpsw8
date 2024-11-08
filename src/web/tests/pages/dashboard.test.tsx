@@ -5,10 +5,11 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import { jest } from '@jest/globals';
 import DashboardPage from '../../src/pages/dashboard';
 import useAuth from '../../src/hooks/useAuth';
 import { configureStore } from '@reduxjs/toolkit';
+import '@testing-library/jest-dom';
+import { APP_ROUTES } from '../../src/config/constants';
 
 // Mock Next.js router
 jest.mock('next/router', () => ({
@@ -112,7 +113,7 @@ describe('DashboardPage', () => {
   it('should redirect to login when not authenticated', () => {
     const mockRouter = { push: jest.fn() };
     jest.spyOn(require('next/router'), 'useRouter').mockReturnValue(mockRouter);
-    
+
     (useAuth as jest.Mock).mockReturnValue({
       isAuthenticated: false,
       user: null,
@@ -128,8 +129,8 @@ describe('DashboardPage', () => {
     );
 
     // Verify redirect to login page
-    expect(mockRouter.push).toHaveBeenCalledWith('/login');
-    
+    expect(mockRouter.push).toHaveBeenCalledWith(APP_ROUTES.LOGIN);
+
     // Verify dashboard content is not rendered
     expect(screen.queryByTestId('main-layout')).not.toBeInTheDocument();
   });
@@ -179,7 +180,7 @@ describe('DashboardPage', () => {
     fireEvent.click(recipeButton);
 
     // Verify navigation to recipe details
-    expect(mockRouter.push).toHaveBeenCalledWith('/dashboard/recipes/123');
+    expect(mockRouter.push).toHaveBeenCalledWith(`${APP_ROUTES.RECIPES}/123`);
   });
 
   /**

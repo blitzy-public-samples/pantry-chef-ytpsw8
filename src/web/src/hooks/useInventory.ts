@@ -26,8 +26,10 @@ import {
   InventoryItem,
   InventoryFilter,
   InventoryCategory,
-  ExpirationAlert
+  ExpirationAlert,
+  StorageLocation
 } from '../interfaces/inventory.interface';
+import { AppDispatch } from '../store/store';
 
 // Expiration check interval in milliseconds (15 minutes)
 const EXPIRATION_CHECK_INTERVAL = 15 * 60 * 1000;
@@ -37,7 +39,7 @@ const EXPIRATION_CHECK_INTERVAL = 15 * 60 * 1000;
  * Requirement: Digital Pantry Management - Comprehensive inventory management
  */
 export const useInventory = (initialFilter: InventoryFilter) => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
 
   // Local state for loading and error handling
   const [loading, setLoading] = useState<boolean>(false);
@@ -46,6 +48,124 @@ export const useInventory = (initialFilter: InventoryFilter) => {
 
   // Redux selectors for inventory state
   const items = useSelector(selectInventoryItems);
+
+  // mock data
+  // const items = [
+  //   {
+  //     id: '1',
+  //     name: 'Milk',
+  //     quantity: 2,
+  //     unit: 'liters',
+  //     storageLocation: StorageLocation.REFRIGERATOR,
+  //     category: 'Dairy',
+  //     expirationDate: new Date('2024-11-15'),
+  //     purchaseDate: new Date('2024-11-01'),
+  //     notes: 'Organic, whole milk',
+  //     imageUrl: 'https://example.com/images/milk.jpg',
+  //   },
+  //   {
+  //     id: '2',
+  //     name: 'Frozen Peas',
+  //     quantity: 1,
+  //     unit: 'kg',
+  //     storageLocation: StorageLocation.FREEZER,
+  //     category: 'Vegetables',
+  //     expirationDate: new Date('2025-02-01'),
+  //     purchaseDate: new Date('2024-10-15'),
+  //     imageUrl: 'https://example.com/images/frozen-peas.jpg',
+  //   },
+  //   {
+  //     id: '3',
+  //     name: 'Rice',
+  //     quantity: 5,
+  //     unit: 'kg',
+  //     storageLocation: StorageLocation.PANTRY,
+  //     category: 'Grains',
+  //     expirationDate: new Date('2025-10-01'),
+  //     notes: 'Basmati rice',
+  //     imageUrl: 'https://example.com/images/rice.jpg',
+  //   },
+  //   {
+  //     id: '4',
+  //     name: 'Eggs',
+  //     quantity: 12,
+  //     unit: 'pieces',
+  //     storageLocation: StorageLocation.REFRIGERATOR,
+  //     category: 'Dairy',
+  //     expirationDate: new Date('2024-11-20'),
+  //     purchaseDate: new Date('2024-11-05'),
+  //     notes: 'Free-range',
+  //     imageUrl: 'https://example.com/images/eggs.jpg',
+  //   },
+  //   {
+  //     id: '5',
+  //     name: 'Chicken Breast',
+  //     quantity: 2,
+  //     unit: 'kg',
+  //     storageLocation: StorageLocation.FREEZER,
+  //     category: 'Meat',
+  //     expirationDate: new Date('2024-12-15'),
+  //     purchaseDate: new Date('2024-11-01'),
+  //     imageUrl: 'https://example.com/images/chicken-breast.jpg',
+  //   },
+  //   {
+  //     id: '6',
+  //     name: 'Olive Oil',
+  //     quantity: 1,
+  //     unit: 'liter',
+  //     storageLocation: StorageLocation.PANTRY,
+  //     category: 'Condiments',
+  //     expirationDate: new Date('2026-01-01'),
+  //     purchaseDate: new Date('2024-10-25'),
+  //     notes: 'Extra virgin',
+  //     imageUrl: 'https://example.com/images/olive-oil.jpg',
+  //   },
+  //   {
+  //     id: '7',
+  //     name: 'Bread',
+  //     quantity: 1,
+  //     unit: 'loaf',
+  //     storageLocation: StorageLocation.PANTRY,
+  //     category: 'Bakery',
+  //     expirationDate: new Date('2024-11-10'),
+  //     purchaseDate: new Date('2024-11-07'),
+  //     imageUrl: 'https://example.com/images/bread.jpg',
+  //   },
+  //   {
+  //     id: '8',
+  //     name: 'Carrots',
+  //     quantity: 1,
+  //     unit: 'kg',
+  //     storageLocation: StorageLocation.REFRIGERATOR,
+  //     category: 'Vegetables',
+  //     expirationDate: new Date('2024-11-25'),
+  //     purchaseDate: new Date('2024-11-05'),
+  //     imageUrl: 'https://example.com/images/carrots.jpg',
+  //   },
+  //   {
+  //     id: '9',
+  //     name: 'Ice Cream',
+  //     quantity: 1,
+  //     unit: 'liters',
+  //     storageLocation: StorageLocation.FREEZER,
+  //     category: 'Desserts',
+  //     expirationDate: new Date('2024-12-20'),
+  //     purchaseDate: new Date('2024-11-01'),
+  //     notes: 'Vanilla flavor',
+  //     imageUrl: 'https://example.com/images/ice-cream.jpg',
+  //   },
+  //   {
+  //     id: '10',
+  //     name: 'Cereal',
+  //     quantity: 2,
+  //     unit: 'boxes',
+  //     storageLocation: StorageLocation.PANTRY,
+  //     category: 'Breakfast',
+  //     expirationDate: new Date('2025-05-01'),
+  //     purchaseDate: new Date('2024-10-15'),
+  //     imageUrl: 'https://example.com/images/cereal.jpg',
+  //   },
+  // ];
   const categories = useSelector(selectCategories);
   const expirationAlerts = useSelector(selectExpirationAlerts);
 

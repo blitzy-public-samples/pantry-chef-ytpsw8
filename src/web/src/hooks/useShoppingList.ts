@@ -13,14 +13,14 @@ import { useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 // Internal dependencies
-import { 
-  ShoppingList, 
-  ShoppingListItem, 
-  ShoppingListFilter, 
-  ShoppingListGenerationOptions 
+import {
+  ShoppingList,
+  ShoppingListItem,
+  ShoppingListFilter,
+  ShoppingListGenerationOptions
 } from '../interfaces/shopping.interface';
 import ShoppingService from '../services/shopping.service';
-import { 
+import {
   fetchShoppingLists,
   fetchShoppingList,
   createShoppingList,
@@ -31,34 +31,36 @@ import {
   toggleItemChecked,
   shoppingSelectors
 } from '../store/slices/shoppingSlice';
+import { AppDispatch } from '../store/store';
 
 /**
  * Custom hook for managing shopping list state and operations
  * Requirement: Shopping List Management (8.1 User Interface Design/Screen Components)
  */
 export const useShoppingList = () => {
-  const dispatch = useDispatch();
-
+  const dispatch = useDispatch<AppDispatch>();
   // Selectors for shopping list state
   const shoppingLists = useSelector(shoppingSelectors.selectAllLists);
   const loading = useSelector((state: any) => state.shopping.loading);
   const error = useSelector((state: any) => state.shopping.error);
 
   /**
-   * Fetch all shopping lists on component mount
-   * Requirement: Shopping List Management
-   */
-  useEffect(() => {
-    dispatch(fetchShoppingLists());
-  }, [dispatch]);
-
-  /**
    * Create a new shopping list
    * Requirement: Shopping List Management
    */
+
+  const fetchList = useCallback(async () => {
+    try {
+      return await dispatch(fetchShoppingLists()).unwrap();
+    } catch (error) {
+      throw new Error(`Failed to create shopping list: ${error}`);
+    }
+  }, [dispatch])
+
+
   const createList = useCallback(async (data: Partial<ShoppingList>) => {
     try {
-      await dispatch(createShoppingList(data)).unwrap();
+      return await dispatch(createShoppingList(data)).unwrap();
     } catch (error) {
       throw new Error(`Failed to create shopping list: ${error}`);
     }
@@ -106,13 +108,21 @@ export const useShoppingList = () => {
    */
   const addItem = useCallback(async (listId: string, item: Partial<ShoppingListItem>) => {
     try {
-      const list = shoppingLists.find(l => l.id === listId);
-      if (!list) throw new Error('Shopping list not found');
+      const index = shoppingLists.findIndex(l => l.id === listId);
+      if (index == -1) throw new Error('Shopping list not found');
 
-      const updatedItems = [...list.items, { ...item, id: crypto.randomUUID() }];
+      const updatedItems = [...shoppingLists[index].items, { ...item, id: crypto.randomUUID() } as ShoppingListItem];
+
+      const updatedList: ShoppingList = {
+        ...shoppingLists[index],
+        items: updatedItems,
+      }
+
       await dispatch(updateShoppingList({
         id: listId,
-        data: { items: updatedItems }
+        data: { items: updatedItems },
+        // temp
+        // updatedLists: updatedList,
       })).unwrap();
     } catch (error) {
       throw new Error(`Failed to add item to shopping list: ${error}`);
@@ -220,7 +230,8 @@ export const useShoppingList = () => {
     updateItem,
     deleteItem,
     toggleItemCheck,
-    filterItems
+    filterItems,
+    fetchList
   };
 };
 

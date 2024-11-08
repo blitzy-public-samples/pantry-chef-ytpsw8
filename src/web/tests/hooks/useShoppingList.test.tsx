@@ -7,7 +7,7 @@
 
 // External dependencies
 // @version: @testing-library/react-hooks ^8.0.1
-import { renderHook, act } from '@testing-library/react-hooks';
+import { renderHook, act, waitFor } from '@testing-library/react';
 // @version: @testing-library/react ^13.0.0
 import { act as reactAct } from '@testing-library/react';
 // @version: react-redux ^8.0.0
@@ -67,7 +67,7 @@ const mockStore = configureStore({
 
 // Test wrapper component
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <Provider store={mockStore}>
+  <Provider store={mockStore} >
     {children}
   </Provider>
 );
@@ -76,15 +76,15 @@ describe('useShoppingList', () => {
   beforeEach(() => {
     // Clear all mocks before each test
     jest.clearAllMocks();
-    
+
     // Set up service mocks
-    (ShoppingService.getShoppingLists as jest.Mock).mockResolvedValue([mockShoppingList]);
-    (ShoppingService.createShoppingList as jest.Mock).mockResolvedValue(mockShoppingList);
-    (ShoppingService.updateShoppingList as jest.Mock).mockResolvedValue(mockShoppingList);
-    (ShoppingService.deleteShoppingList as jest.Mock).mockResolvedValue(undefined);
-    (ShoppingService.generateShoppingList as jest.Mock).mockResolvedValue(mockShoppingList);
-    (ShoppingService.updateShoppingListItem as jest.Mock).mockResolvedValue(mockShoppingList.items[0]);
-    (ShoppingService.filterShoppingList as jest.Mock).mockResolvedValue(mockShoppingList.items);
+    (ShoppingService.getShoppingLists as jest.Mocked<typeof ShoppingService.getShoppingLists>).mockResolvedValue([mockShoppingList]);
+    (ShoppingService.createShoppingList as jest.Mocked<typeof ShoppingService.createShoppingList>).mockResolvedValue(mockShoppingList);
+    (ShoppingService.updateShoppingList as jest.Mocked<typeof ShoppingService.updateShoppingList>).mockResolvedValue(mockShoppingList);
+    (ShoppingService.deleteShoppingList as jest.Mocked<typeof ShoppingService.deleteShoppingList>).mockResolvedValue(undefined);
+    (ShoppingService.generateShoppingList as jest.Mocked<typeof ShoppingService.generateShoppingList>).mockResolvedValue(mockShoppingList);
+    (ShoppingService.updateShoppingListItem as jest.Mocked<typeof ShoppingService.updateShoppingListItem>).mockResolvedValue(mockShoppingList.items[0]);
+    (ShoppingService.filterShoppingList as jest.Mocked<typeof ShoppingService.filterShoppingList>).mockResolvedValue(mockShoppingList.items);
   });
 
   /**
@@ -92,13 +92,13 @@ describe('useShoppingList', () => {
    * Requirement: Shopping List Management
    */
   it('should fetch shopping lists on mount', async () => {
-    const { result, waitForNextUpdate } = renderHook(() => useShoppingList(), { wrapper });
+    const { result } = renderHook(() => useShoppingList(), { wrapper });
 
     // Initial loading state
     expect(result.current.loading).toBe(true);
     expect(result.current.error).toBeNull();
 
-    await waitForNextUpdate();
+    await waitFor(() => expect(result.current));
 
     // Verify final state
     expect(result.current.loading).toBe(false);
@@ -216,7 +216,9 @@ describe('useShoppingList', () => {
       categories: ['Dairy'],
       searchTerm: 'milk',
       showCheckedItems: true,
-      recipeId: ''
+      recipeId: '',
+      sortBy: '',
+      sortDirection: '',
     };
 
     await act(async () => {
@@ -232,17 +234,17 @@ describe('useShoppingList', () => {
    */
   it('should handle errors appropriately', async () => {
     const errorMessage = 'Failed to fetch shopping lists';
-    (ShoppingService.getShoppingLists as jest.Mock).mockRejectedValue(new Error(errorMessage));
+    (ShoppingService.getShoppingLists as jest.Mock).mockReturnValueOnce(new Error(errorMessage));
 
-    const { result, waitForNextUpdate } = renderHook(() => useShoppingList(), { wrapper });
+    const { result } = renderHook(() => useShoppingList(), { wrapper });
 
-    await waitForNextUpdate();
+    await waitFor(() => expect(result.current));
 
     expect(result.current.error).toBeTruthy();
 
     // Test error handling for list creation
-    (ShoppingService.createShoppingList as jest.Mock).mockRejectedValue(new Error('Creation failed'));
-    
+    (ShoppingService.createShoppingList as jest.Mock).mockReturnValueOnce(new Error('Creation failed'));
+
     await act(async () => {
       try {
         await result.current.createList({ name: 'Test List' });
@@ -252,8 +254,8 @@ describe('useShoppingList', () => {
     });
 
     // Verify error state is cleared on subsequent successful operations
-    (ShoppingService.getShoppingLists as jest.Mock).mockResolvedValue([mockShoppingList]);
-    
+    (ShoppingService.getShoppingLists as jest.Mock).mockReturnValueOnce([mockShoppingList]);
+
     await act(async () => {
       await result.current.createList({ name: 'New List' });
     });

@@ -3,16 +3,16 @@
 // @version react-redux ^8.0.0
 // @version @reduxjs/toolkit ^1.9.0
 // @version jest ^29.0.0
-
-import { renderHook, act } from '@testing-library/react-hooks';
-import { Provider } from 'react-redux';
+import React from 'react';
+import { renderHook, act } from '@testing-library/react';
 import { configureStore } from '@reduxjs/toolkit';
 import { useAuth } from '../../src/hooks/useAuth';
-import { 
-  LoginCredentials, 
-  SignupCredentials, 
-  AuthState 
+import {
+  LoginCredentials,
+  SignupCredentials,
+  AuthState
 } from '../../src/interfaces/auth.interface';
+import { Provider } from 'react-redux';
 
 /**
  * HUMAN TASKS:
@@ -92,7 +92,7 @@ const mockUser = {
 
 // Wrapper component for providing Redux store
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <Provider store={mockStore}>{children}</Provider>
+  <Provider store= { mockStore } > { children } </Provider>
 );
 
 describe('useAuth hook', () => {

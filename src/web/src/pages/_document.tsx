@@ -9,6 +9,7 @@
 
 import Document, { Html, Head, Main, NextScript } from 'next/document'; // next/document ^13.0.0
 import { palette, typography } from '../config/theme';
+import React from 'react';
 
 /**
  * Custom Document component that extends Next.js Document to customize the HTML structure
@@ -25,10 +26,10 @@ class CustomDocument extends Document {
         <Head>
           {/* Character encoding */}
           <meta charSet="utf-8" />
-          
+
           {/* Responsive viewport configuration */}
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          
+          {/* <meta name="viewport" content="width=device-width, initial-scale=1.0" /> */}
+
           {/* Preload Inter font for optimal performance */}
           <link
             rel="preconnect"
@@ -43,13 +44,13 @@ class CustomDocument extends Document {
             href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
             rel="stylesheet"
           />
-          
+
           {/* Material Design theme color */}
           <meta
             name="theme-color"
             content={palette.primary[500]}
           />
-          
+
           {/* PWA capable */}
           <meta
             name="mobile-web-app-capable"
@@ -66,7 +67,7 @@ class CustomDocument extends Document {
             padding: 0,
             backgroundColor: palette.background.default,
             color: palette.text.primary,
-            fontFamily: typography.fontFamily.sans.join(', '),
+            fontFamily: typography.fontFamily.sans,
             fontSize: typography.fontSize.base,
             fontWeight: typography.fontWeight.normal,
             lineHeight: typography.lineHeight.normal,

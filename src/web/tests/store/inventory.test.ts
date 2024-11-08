@@ -65,7 +65,7 @@ describe('inventorySlice', () => {
   beforeEach(() => {
     // Reset all mocks before each test
     jest.clearAllMocks();
-    
+
     // Create a fresh store instance
     store = configureStore({
       reducer: {
@@ -100,7 +100,7 @@ describe('inventorySlice', () => {
       expect(store.getState().inventory.loading).toBe(false);
       expect(store.getState().inventory.error).toBeNull();
       expect(store.getState().inventory.items).toEqual([mockInventoryItem]);
-      
+
       // Verify service called with correct parameters
       expect(InventoryService.getInventoryItems).toHaveBeenCalledWith(mockFilter);
     });
@@ -122,7 +122,7 @@ describe('inventorySlice', () => {
     it('Should successfully add new inventory item', async () => {
       const newItem = { ...mockInventoryItem };
       delete newItem.id;
-      
+
       (InventoryService.addInventoryItem as jest.Mock).mockResolvedValue(mockInventoryItem);
 
       await store.dispatch(addItem(newItem));

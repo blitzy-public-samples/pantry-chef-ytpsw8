@@ -9,9 +9,9 @@
 import React, { useState, useCallback } from 'react'; // ^18.0.0
 import { useRouter } from 'next/router'; // ^13.0.0
 import classNames from 'classnames'; // ^2.3.0
-import { Header } from './Header';
-import { Footer } from './Footer';
-import { Sidebar } from './Sidebar';
+import Header from './Header';
+import Footer from './Footer';
+import Sidebar from './Sidebar';
 import { useAuth } from '../../hooks/useAuth';
 
 /**
@@ -77,7 +77,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, className = '' }) => 
     'duration-300',
     'ease-in-out',
     {
-      'md:ml-64': isAuthenticated, // Sidebar width on desktop when authenticated
       'ml-0': !isAuthenticated || !isSidebarOpen // No margin when not authenticated or sidebar closed
     }
   );
@@ -85,7 +84,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children, className = '' }) => 
   return (
     <div className={layoutClasses}>
       {/* Header Component */}
-      <Header 
+      <Header
         className="fixed top-0 left-0 right-0 h-16 z-50"
       />
 

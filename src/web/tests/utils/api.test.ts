@@ -7,6 +7,7 @@ import MockAdapter from 'axios-mock-adapter';
 // Internal dependencies
 import { apiClient, handleApiError } from '../../src/utils/api';
 import { API_ENDPOINTS } from '../../src/config/api';
+import { APP_ROUTES } from '../../src/config/constants';
 
 // Constants for testing
 const TOKEN_STORAGE_KEY = 'auth_token';
@@ -124,7 +125,7 @@ describe('apiClient', () => {
       expect(localStorageMock.getItem(TOKEN_STORAGE_KEY)).toBeNull();
       expect(localStorageMock.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBeNull();
       // Verify redirect
-      expect(locationSpy).toHaveBeenCalledWith('/login');
+      expect(locationSpy).toHaveBeenCalledWith(APP_ROUTES.LOGIN);
     }
   });
 });

@@ -12,6 +12,7 @@ import MainLayout from '../../components/layout/MainLayout';
 import Button from '../../components/common/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-toastify'; // ^9.0.0
+import { APP_ROUTES } from '../../config/constants';
 
 /**
  * Interface for user settings form data
@@ -23,9 +24,9 @@ interface SettingsFormData {
   lastName: string;
   dietaryRestrictions: string[];
   notificationPreferences: {
-    email: boolean;
-    push: boolean;
-    expirationAlerts: boolean;
+    email?: boolean;
+    push?: boolean;
+    expirationAlerts?: boolean;
   };
 }
 
@@ -55,7 +56,7 @@ const DIETARY_RESTRICTIONS = [
 const SettingsPage: React.FC = () => {
   const router = useRouter();
   const { user, logout, loading: authLoading, error: authError } = useAuth();
-  
+
   // Form state initialization
   const [formData, setFormData] = useState<SettingsFormData>({
     email: user?.email || '',
@@ -63,12 +64,12 @@ const SettingsPage: React.FC = () => {
     lastName: user?.lastName || '',
     dietaryRestrictions: user?.dietaryRestrictions || [],
     notificationPreferences: {
-      email: user?.notificationPreferences?.email || false,
-      push: user?.notificationPreferences?.push || false,
-      expirationAlerts: user?.notificationPreferences?.expirationAlerts || true,
+      // email: user?.notificationPreferences?.email || false,
+      // push: user?.notificationPreferences?.push || false,
+      // expirationAlerts: user?.notificationPreferences?.expirationAlerts || true,
     },
   });
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,9 +82,9 @@ const SettingsPage: React.FC = () => {
         lastName: user.lastName,
         dietaryRestrictions: user.dietaryRestrictions || [],
         notificationPreferences: {
-          email: user.notificationPreferences?.email || false,
-          push: user.notificationPreferences?.push || false,
-          expirationAlerts: user.notificationPreferences?.expirationAlerts || true,
+          // email: user.notificationPreferences?.email || false,
+          // push: user.notificationPreferences?.push || false,
+          // expirationAlerts: user.notificationPreferences?.expirationAlerts || true,
         },
       });
     }
@@ -181,15 +182,15 @@ const SettingsPage: React.FC = () => {
   const handleLogout = useCallback(async () => {
     try {
       await logout();
-      router.push('/login');
+      router.push(APP_ROUTES.LOGIN);
     } catch (err) {
       toast.error('Failed to logout');
     }
   }, [logout, router]);
 
   return (
-    <MainLayout>
-      <div className="max-w-4xl mx-auto p-6">
+    <>
+      <div className="mx-auto p-6">
         <h1 className="text-2xl font-bold mb-8">Account Settings</h1>
 
         {error && (
@@ -253,18 +254,16 @@ const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleNotificationToggle('email')}
-                  className={`${
-                    formData.notificationPreferences.email
-                      ? 'bg-primary-600'
-                      : 'bg-gray-200'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2`}
+                  className={`${formData.notificationPreferences.email
+                    ? 'bg-primary-600'
+                    : 'bg-gray-200'
+                    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2`}
                 >
                   <span
-                    className={`${
-                      formData.notificationPreferences.email
-                        ? 'translate-x-5'
-                        : 'translate-x-0'
-                    } inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    className={`${formData.notificationPreferences.email
+                      ? 'translate-x-5'
+                      : 'translate-x-1'
+                      } inline-block h-5 w-5 my-0.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
                   />
                 </button>
               </div>
@@ -277,18 +276,16 @@ const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleNotificationToggle('push')}
-                  className={`${
-                    formData.notificationPreferences.push
-                      ? 'bg-primary-600'
-                      : 'bg-gray-200'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2`}
+                  className={`${formData.notificationPreferences.push
+                    ? 'bg-primary-600'
+                    : 'bg-gray-200'
+                    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2`}
                 >
                   <span
-                    className={`${
-                      formData.notificationPreferences.push
-                        ? 'translate-x-5'
-                        : 'translate-x-0'
-                    } inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    className={`${formData.notificationPreferences.push
+                      ? 'translate-x-5'
+                      : 'translate-x-1'
+                      } inline-block h-5 w-5 my-0.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
                   />
                 </button>
               </div>
@@ -301,18 +298,16 @@ const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleNotificationToggle('expirationAlerts')}
-                  className={`${
-                    formData.notificationPreferences.expirationAlerts
-                      ? 'bg-primary-600'
-                      : 'bg-gray-200'
-                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2`}
+                  className={`${formData.notificationPreferences.expirationAlerts
+                    ? 'bg-primary-600'
+                    : 'bg-gray-200'
+                    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2`}
                 >
                   <span
-                    className={`${
-                      formData.notificationPreferences.expirationAlerts
-                        ? 'translate-x-5'
-                        : 'translate-x-0'
-                    } inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    className={`${formData.notificationPreferences.expirationAlerts
+                      ? 'translate-x-5'
+                      : 'translate-x-1'
+                      } inline-block h-5 w-5 my-0.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
                   />
                 </button>
               </div>
@@ -366,7 +361,7 @@ const SettingsPage: React.FC = () => {
           </div>
         </form>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

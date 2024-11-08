@@ -4,6 +4,7 @@ import ReconnectingWebSocket from 'reconnecting-websocket'; // reconnecting-webs
 
 // Internal dependencies
 import { WEBSOCKET_CONFIG } from '../config/constants';
+import { EventListenerFunction } from '../interfaces/auth.interface';
 
 /**
  * HUMAN TASKS:
@@ -23,7 +24,7 @@ import { WEBSOCKET_CONFIG } from '../config/constants';
  */
 export class WebSocketService {
   private socket: Socket | null = null;
-  private eventListeners: Map<string, Function[]> = new Map();
+  private eventListeners: Map<string, EventListenerFunction[]> = new Map();
   private reconnectAttempts: number = 0;
   private isConnected: boolean = false;
 
@@ -105,7 +106,7 @@ export class WebSocketService {
    * @param event - Event name to subscribe to
    * @param callback - Callback function to handle event data
    */
-  public subscribe(event: string, callback: Function): void {
+  public subscribe(event: string, callback: EventListenerFunction): void {
     if (!this.socket) {
       throw new Error('WebSocket not connected');
     }
@@ -131,7 +132,7 @@ export class WebSocketService {
    * @param event - Event name to unsubscribe from
    * @param callback - Callback function to remove
    */
-  public unsubscribe(event: string, callback: Function): void {
+  public unsubscribe(event: string, callback: EventListenerFunction): void {
     if (!this.socket) {
       return;
     }

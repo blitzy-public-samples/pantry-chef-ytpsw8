@@ -67,9 +67,22 @@ export const palette = {
   },
 };
 
+export const chartColors = {
+  mediumBlue: palette.primary[600],
+  brightGreen: palette.success.main,
+  mutedBlueGrey: palette.text.disabled,
+  darkerBlue: palette.primary[700],
+  boldRed: palette.error.main,
+  vibrantAmber: palette.warning.main,
+  darkSlate: palette.secondary[800],
+  softGreyBlue: palette.secondary[500],
+  lightBlue: palette.primary[100],
+  softGrey: palette.background.dark,
+}
+
 export const typography = {
   fontFamily: {
-    sans: ['Inter', 'system-ui', 'sans-serif'],
+    sans: ['Inter', 'system-ui', 'sans-serif'].join(','),
     serif: ['Georgia', 'serif'],
     mono: ['Menlo', 'monospace'],
   },
@@ -110,6 +123,7 @@ export const spacing = {
 };
 
 export const breakpoints = {
+  xs: '480px',
   sm: '640px',
   md: '768px',
   lg: '1024px',
@@ -140,6 +154,7 @@ export const theme = {
   breakpoints,
   shadows,
   borderRadius,
+  chartColors,
 };
 
 export default theme;

@@ -1,12 +1,13 @@
 // @version @reduxjs/toolkit ^1.9.5
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { 
-  AuthState, 
-  LoginCredentials, 
-  SignupCredentials, 
-  AuthResponse 
+import {
+  AuthState,
+  LoginCredentials,
+  SignupCredentials,
+  AuthResponse
 } from '../../interfaces/auth.interface';
 import { AuthService } from '../../services/auth.service';
+import { RootState } from '../store';
 
 /**
  * HUMAN TASKS:
@@ -133,7 +134,7 @@ export const authSlice = createSlice({
         state.error = action.payload as string;
       })
 
-    // Signup reducers
+      // Signup reducers
       .addCase(signupThunk.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -151,7 +152,7 @@ export const authSlice = createSlice({
         state.error = action.payload as string;
       })
 
-    // Logout reducers
+      // Logout reducers
       .addCase(logoutThunk.pending, (state) => {
         state.loading = true;
       })
@@ -169,7 +170,7 @@ export const authSlice = createSlice({
         state.error = action.payload as string;
       })
 
-    // Token refresh reducers
+      // Token refresh reducers
       .addCase(refreshTokenThunk.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -191,6 +192,8 @@ export const authSlice = createSlice({
 
 // Export actions
 export const { clearError, resetAuth } = authSlice.actions;
+
+export const selectAuth = (state: RootState) => state.auth;
 
 // Export reducer
 export default authSlice.reducer;

@@ -8,7 +8,7 @@
 
 // External dependencies
 // @version: react ^18.2.0
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 // @version: next ^13.0.0
 import type { NextPage } from 'next';
 
@@ -29,7 +29,7 @@ import type { ShoppingListItem } from '../../interfaces/shopping.interface';
 const ShoppingDashboard: NextPage = () => {
   // State for managing checked items visibility and item editing
   const [showCheckedItems, setShowCheckedItems] = useState(false);
-  const [editingItem, setEditingItem] = useState<ShoppingListItem | null>(null);
+  const [editingItem, setEditingItem] = useState<ShoppingListItem | null>(undefined);
   const [selectedListId, setSelectedListId] = useState<string>('');
 
   // Initialize shopping list hook for state and operations
@@ -42,8 +42,17 @@ const ShoppingDashboard: NextPage = () => {
     toggleItemCheck,
     addItem,
     updateItem,
-    deleteItem
+    deleteItem,
+    fetchList
   } = useShoppingList();
+
+  /**
+   * Fetch all shopping lists on component mount
+   * Requirement: Shopping List Management
+   */
+  useEffect(() => {
+    handleFetchLists();
+  }, []);
 
   /**
    * Handles toggling item check state
@@ -63,46 +72,51 @@ const ShoppingDashboard: NextPage = () => {
    * Handles saving new or edited items
    * Requirement: Shopping List Management - Item editing
    */
-  const handleSaveItem = useCallback(async (item: ShoppingListItem) => {
+  const handleSaveItem = useCallback(async () => {
+    setEditingItem(undefined);
+  }, []);
+
+  const handleFetchLists = async () => {
     try {
-      if (editingItem) {
-        await updateItem(selectedListId, item.id, item);
-      } else {
-        await addItem(selectedListId, item);
-      }
-      setEditingItem(null);
+      await fetchList();
     } catch (error) {
-      console.error('Failed to save item:', error);
+      console.error('Failed to fetch items:', error);
     }
-  }, [selectedListId, editingItem, updateItem, addItem]);
+  }
+
+  const handleEditingItems = (item) => {
+    setEditingItem(item);
+  };
 
   /**
    * Handles creating a new shopping list
    * Requirement: Shopping List Generation - List creation
    */
-  const handleCreateList = useCallback(async () => {
+  const handleCreateList = async () => {
     try {
       const newList = await createList({
         name: `Shopping List ${new Date().toLocaleDateString()}`,
         items: [],
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        id: crypto.randomUUID(),
       });
       setSelectedListId(newList.id);
+
     } catch (error) {
       console.error('Failed to create list:', error);
     }
-  }, [createList]);
+  };
 
   return (
-    <MainLayout className="shopping-dashboard">
+    <>
       <div className="container mx-auto px-4 py-6">
         {/* Header Section */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold text-gray-800">
+        <div className="flex flex-col justify-stretch md:justify-between  items-center mb-6 md:flex-row">
+          <h1 className="text-2xl font-semibold text-gray-800 flex self-start">
             Shopping Lists
           </h1>
-          <div className="flex gap-4">
+          <div className="flex gap-4 self-end md:pt-0 pt-2">
             {/* Create List Button */}
             <button
               onClick={handleCreateList}
@@ -127,14 +141,13 @@ const ShoppingDashboard: NextPage = () => {
             {error}
           </div>
         )}
-
         {/* Shopping List Selection */}
         {shoppingLists.length > 0 && (
-          <div className="mb-6">
+          <div className="flex mb-6 gap-4 justify-between">
             <select
               value={selectedListId}
               onChange={(e) => setSelectedListId(e.target.value)}
-              className="w-full md:w-auto px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full md:w-auto pl-4 pr-10 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
               <option value="">Select a list</option>
               {shoppingLists.map((list) => (
@@ -143,6 +156,13 @@ const ShoppingDashboard: NextPage = () => {
                 </option>
               ))}
             </select>
+            {editingItem === undefined && selectedListId && <button
+              onClick={() => handleEditingItems(null)}
+              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+              disabled={loading}
+            >
+              Add item
+            </button>}
           </div>
         )}
 
@@ -164,7 +184,9 @@ const ShoppingDashboard: NextPage = () => {
               className="bg-white rounded-lg shadow-md"
               initialItem={editingItem}
               onSave={handleSaveItem}
-              onCancel={() => setEditingItem(null)}
+              onCancel={() => setEditingItem(undefined)}
+              listId={selectedListId}
+            // probably pass list id here
             />
           )}
 
@@ -194,7 +216,7 @@ const ShoppingDashboard: NextPage = () => {
           )}
         </div>
       </div>
-    </MainLayout>
+    </>
   );
 };
 

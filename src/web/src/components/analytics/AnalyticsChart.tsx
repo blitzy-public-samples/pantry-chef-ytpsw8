@@ -22,8 +22,8 @@ import {
 } from 'recharts';
 
 // Internal dependencies
-import { AnalyticsMetrics, DateRange } from '../../interfaces/analytics.interface';
-import { analyticsService } from '../../services/analytics.service';
+import { AnalyticsMetrics } from '../../interfaces/analytics.interface';
+import { chartColors } from '../../config/theme';
 
 interface AnalyticsChartProps {
   chartType: 'line' | 'bar';
@@ -89,18 +89,21 @@ const AnalyticsChart: React.FC<AnalyticsChartProps> = React.memo(({
   chartType,
   data,
   title,
-  chartConfig = {
-    height: 400,
-    showLegend: true,
-    showTooltip: true,
-    colors: ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00C49F', '#FFBB28']
-  }
+  chartConfig,
 }) => {
   // Format data for chart rendering
   const formattedData = useMemo(() => formatChartData(data), [data]);
 
+  const chartConfiguration = {
+    height: 400,
+    showLegend: true,
+    showTooltip: true,
+    colors: Object.values(chartColors),
+    ...chartConfig,
+  }
+
   // Extract metric keys for rendering chart elements
-  const metricKeys = useMemo(() => 
+  const metricKeys = useMemo(() =>
     Object.keys(formattedData[0] || {}).filter(key => key !== 'date'),
     [formattedData]
   );
@@ -123,16 +126,16 @@ const AnalyticsChart: React.FC<AnalyticsChartProps> = React.memo(({
         <LineChart {...commonProps}>
           <XAxis dataKey="date" />
           <YAxis />
-          {chartConfig.showTooltip && (
+          {chartConfiguration.showTooltip && (
             <Tooltip formatter={formatTooltip} />
           )}
-          {chartConfig.showLegend && <Legend />}
+          {chartConfiguration.showLegend && <Legend />}
           {metricKeys.map((key, index) => (
             <Line
               key={key}
               type="monotone"
               dataKey={key}
-              stroke={chartConfig.colors?.[index]}
+              stroke={chartConfiguration.colors?.[index]}
               activeDot={{ r: 8 }}
               dot={false}
             />
@@ -145,15 +148,15 @@ const AnalyticsChart: React.FC<AnalyticsChartProps> = React.memo(({
       <BarChart {...commonProps}>
         <XAxis dataKey="date" />
         <YAxis />
-        {chartConfig.showTooltip && (
+        {chartConfiguration.showTooltip && (
           <Tooltip formatter={formatTooltip} />
         )}
-        {chartConfig.showLegend && <Legend />}
+        {chartConfiguration.showLegend && <Legend />}
         {metricKeys.map((key, index) => (
           <Bar
             key={key}
             dataKey={key}
-            fill={chartConfig.colors?.[index]}
+            fill={chartConfiguration.colors?.[index]}
             stackId="metrics"
           />
         ))}
@@ -164,7 +167,7 @@ const AnalyticsChart: React.FC<AnalyticsChartProps> = React.memo(({
   return (
     <div className="analytics-chart">
       <h3 className="chart-title">{title}</h3>
-      <ResponsiveContainer width="100%" height={chartConfig.height}>
+      <ResponsiveContainer width="100%" height={chartConfiguration.height}>
         {renderChart()}
       </ResponsiveContainer>
     </div>

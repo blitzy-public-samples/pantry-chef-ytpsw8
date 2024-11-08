@@ -33,16 +33,6 @@ interface ModalProps {
 }
 
 /**
- * Default props for the Modal component
- */
-const defaultProps: Partial<ModalProps> = {
-  size: 'md',
-  showCloseButton: true,
-  closeOnBackdropClick: true,
-  preventScroll: true,
-};
-
-/**
  * Modal size configuration using theme breakpoints
  */
 const modalSizes = {
@@ -75,7 +65,13 @@ const animations = {
  * Generates class names for the modal based on size and custom classes
  */
 const getModalClasses = (props: ModalProps): string => {
-  const { size = 'md', className } = props;
+  const {
+    size = 'md',
+    className,
+    showCloseButton = true,
+    closeOnBackdropClick = true,
+    preventScroll = true
+  } = props;
 
   return classnames(
     // Base classes
@@ -217,7 +213,5 @@ export const Modal: React.FC<ModalProps> = (props) => {
     </AnimatePresence>
   );
 };
-
-Modal.defaultProps = defaultProps;
 
 export default Modal;

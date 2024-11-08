@@ -19,11 +19,11 @@
 // Ensures proper CSS processing for responsive design through autoprefixer
 
 module.exports = {
-  plugins: [
-    // Core Tailwind CSS processing for utility-first CSS framework
-    require('tailwindcss'),
-    
-    // Automatic vendor prefix addition for cross-browser compatibility
-    require('autoprefixer')
-  ]
+  // Core Tailwind CSS processing for utility-first CSS framework
+
+  // Automatic vendor prefix addition for cross-browser compatibility
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {}
+  },
 };

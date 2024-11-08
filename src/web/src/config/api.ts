@@ -1,5 +1,5 @@
 // External dependency: Next.js environment variables (^13.0.0)
-import { BASE_URL, TIMEOUT } from './constants';
+import { API_CONFIG as apiConfig } from './constants';
 
 // Requirement: API Integration (5.2.1 Client Applications)
 // Defines API versions for versioning control
@@ -84,8 +84,8 @@ export const API_ENDPOINTS = {
 // Requirement: Security Configuration (9.1 Authentication and Authorization)
 // Base configuration for API requests
 export const API_CONFIG = {
-  baseURL: BASE_URL,
-  timeout: TIMEOUT,
+  baseURL: apiConfig.BASE_URL,
+  timeout: apiConfig.TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
@@ -94,7 +94,7 @@ export const API_CONFIG = {
 
 // Helper function to build full API URL
 export const buildApiUrl = (endpoint: string, version: string = API_VERSIONS.V1): string => {
-  return `${BASE_URL}${version}${endpoint}`;
+  return `${apiConfig.BASE_URL}${version}${endpoint}`;
 };
 
 // Helper function to replace URL parameters

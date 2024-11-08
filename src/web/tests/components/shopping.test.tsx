@@ -4,7 +4,6 @@ import React from 'react';
 // @version: @testing-library/react ^13.0.0
 import { render, fireEvent, waitFor, screen } from '@testing-library/react';
 // @version: @jest/globals ^29.0.0
-import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 // @version: react-redux ^8.0.0
 import { Provider } from 'react-redux';
 
@@ -13,6 +12,7 @@ import { ShoppingList } from '../../src/components/shopping/ShoppingList';
 import { ListEditor } from '../../src/components/shopping/ListEditor';
 import { useShoppingList } from '../../src/hooks/useShoppingList';
 import { ShoppingListItem } from '../../src/interfaces/shopping.interface';
+import { configureStore } from '@reduxjs/toolkit';
 
 // Mock the useShoppingList hook
 jest.mock('../../src/hooks/useShoppingList');
@@ -42,18 +42,16 @@ const mockShoppingListWithRecipe: ShoppingListItem = {
   recipeName: 'Chicken Curry'
 };
 
-// Mock Redux store
-const mockStore = {
-  getState: () => ({
-    shopping: {
-      lists: [],
-      loading: false,
-      error: null
-    }
-  }),
-  dispatch: jest.fn(),
-  subscribe: jest.fn()
+const createMockStore = () => {
+  return configureStore({
+    reducer: {
+      auth: (state = {}, action) => state,
+    },
+  });
 };
+
+// Mock Redux store
+const mockStore = createMockStore();
 
 // Test suite for ShoppingList component
 describe('ShoppingList Component', () => {
@@ -75,7 +73,7 @@ describe('ShoppingList Component', () => {
   // Test requirement: Shopping List Management - Display and interaction
   test('renders shopping list with items correctly', () => {
     const onItemCheck = jest.fn();
-    
+
     render(
       <Provider store={mockStore}>
         <ShoppingList
@@ -224,7 +222,7 @@ describe('ListEditor Component', () => {
   // Test requirement: Shopping List Management - Form validation
   test('validates required fields before submission', async () => {
     const onSave = jest.fn();
-    
+
     render(
       <Provider store={mockStore}>
         <ListEditor
@@ -333,7 +331,7 @@ describe('ListEditor Component', () => {
   // Test requirement: Shopping List Management - Cancel operation
   test('handles cancel operation correctly', () => {
     const onCancel = jest.fn();
-    
+
     render(
       <Provider store={mockStore}>
         <ListEditor
