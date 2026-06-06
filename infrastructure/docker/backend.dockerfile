@@ -96,10 +96,16 @@ LABEL maintainer="PantryChef DevOps" \
       description="PantryChef Backend Service" \
       version="1.0"
 
-# Drop capabilities for security hardening
-# Requirement: Security Implementation - Implements security hardening measures
-SECURITY_OPTS="no-new-privileges:true"
-CAPABILITIES="--cap-drop=ALL"
+# Capability-drop and no-new-privileges hardening are enforced at RUNTIME, not at
+# build time. There is no valid Dockerfile instruction that drops Linux capabilities
+# or sets the no-new-privileges flag on the resulting container; those are properties
+# of how the container is *run*. They are therefore applied by the orchestrator:
+#   - docker-compose: `security_opt: ["no-new-privileges:true"]` and `cap_drop: ["ALL"]`
+#                     (see infrastructure/docker/docker-compose.yml -> services.backend)
+#   - docker run:     `--security-opt no-new-privileges:true --cap-drop=ALL`
+# Build-time hardening is already in place above: the image runs as the non-root
+# `nodejs` user (see `USER nodejs:nodejs`).
+# Requirement: Security Implementation - Implements container security best practices
 
 # Define entry point
 CMD ["node", "dist/server.js"]

@@ -37,6 +37,11 @@ services:
       start_period: 20s
     security_opt:
       - no-new-privileges:true
+    # Drop all Linux capabilities for the backend container (security hardening).
+    # This preserves the --cap-drop=ALL intent that previously lived (invalidly) in
+    # backend.dockerfile; capability dropping is a runtime container option, applied here.
+    cap_drop:
+      - ALL
     ulimits:
       nofile:
         soft: 65536
