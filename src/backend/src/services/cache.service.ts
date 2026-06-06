@@ -136,10 +136,22 @@ export class CacheService {
      */
     public async clear(pattern: string): Promise<void> {
         try {
-            const keys = await this.redisClient.keys(pattern);
-            
+            // ioredis applies the configured `keyPrefix` to key ARGUMENTS (e.g. get/set/del)
+            // but NOT to the match pattern of the KEYS command, and the keys KEYS returns are
+            // themselves already prefix-qualified. A naive `keys(pattern)` therefore scans the
+            // UN-prefixed namespace and matches nothing whenever a keyPrefix is configured --
+            // which it always is (config/redis.ts sets `keyPrefix = ${NODE_ENV}:`) -- silently
+            // turning every pattern-based invalidation into a no-op (e.g. shopping list cache
+            // invalidation on mutation). Prepend the prefix to the scan pattern so the stored
+            // keys are matched.
+            const keyPrefix = this.redisClient.options.keyPrefix ?? '';
+            const keys = await this.redisClient.keys(`${keyPrefix}${pattern}`);
+
             if (keys.length > 0) {
-                await this.redisClient.del(...keys);
+                // KEYS returns prefix-qualified keys; strip the prefix so DEL (which re-applies
+                // it) targets the real keys instead of double-prefixed misses that delete nothing.
+                const unprefixedKeys = keys.map((key) => key.slice(keyPrefix.length));
+                await this.redisClient.del(...unprefixedKeys);
             }
 
             logger.info('Cache clear successful', {

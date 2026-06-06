@@ -218,6 +218,50 @@ describe('Shopping List Integration Tests', () => {
     });
   });
 
+  describe('cache invalidation on mutation (Finding #1)', () => {
+    // Regression guard for the CRITICAL CP3 finding: every mutation must invalidate the per-user
+    // list cache so the very next cache-first getLists reflects the change. Before the
+    // CacheService.clear() keyPrefix fix this path served STALE data for the full 1h TTL because
+    // clear()'s KEYS glob never matched the keyPrefix-qualified `<NODE_ENV>:shopping:...` keys, so
+    // invalidateUserCache deleted nothing (AAP §0.3.2 "invalidate on mutation").
+    it('create invalidates cache: next getLists shows the new list', async () => {
+      await shoppingService.create(testUserId, { name: 'List ONE', items: [] });
+
+      // Prime the cache for the default window (writes shopping:<userId>:1:50).
+      const firstRead = await shoppingService.getLists(testUserId);
+      expect(firstRead).toHaveLength(1);
+
+      // Mutate: a second create MUST invalidate the cached window.
+      await shoppingService.create(testUserId, { name: 'List TWO', items: [] });
+
+      // The next cache-first read MUST reflect the mutation (2 lists), not stale cache (1).
+      const secondRead = await shoppingService.getLists(testUserId);
+      expect(secondRead).toHaveLength(2);
+      expect(secondRead.map((list) => list.name)).toEqual(
+        expect.arrayContaining(['List ONE', 'List TWO'])
+      );
+
+      // The cache-served result now matches DB truth (no stale survivor).
+      const dbCount = await ShoppingModel.countDocuments({ userId: testUserId });
+      expect(dbCount).toBe(2);
+    });
+
+    it('delete invalidates cache: next getLists drops the list', async () => {
+      const created = await shoppingService.create(testUserId, { name: 'Doomed', items: [] });
+
+      // Prime the cache.
+      const beforeDelete = await shoppingService.getLists(testUserId);
+      expect(beforeDelete).toHaveLength(1);
+
+      // Mutate: delete MUST invalidate the cached window.
+      await shoppingService.delete(testUserId, created.id);
+
+      // The next cache-first read MUST NOT show the deleted list (no stale survivor).
+      const afterDelete = await shoppingService.getLists(testUserId);
+      expect(afterDelete).toHaveLength(0);
+    });
+  });
+
   describe('update', () => {
     it('updates the list name and persists the change', async () => {
       const created = await shoppingService.create(testUserId, {
