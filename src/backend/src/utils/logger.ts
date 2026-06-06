@@ -1,6 +1,10 @@
 import winston from 'winston'; // ^3.8.0
 import morgan from 'morgan'; // ^1.10.0
-import WinstonCloudWatch from 'winston-cloudwatch'; // ^3.1.0
+// NOTE: winston-cloudwatch (^3.1.0) is intentionally NOT imported at module scope. It eagerly
+// require()s '@aws-sdk/client-cloudwatch-logs' the moment it loads, and that AWS SDK transitive
+// dependency is only needed for the production CloudWatch transport. It is loaded lazily inside
+// createLogger() (production branch only) so non-production environments — including the Jest test
+// runner — can import this logger without pulling in (or installing) the AWS SDK.
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { ERROR_CODES } from './constants';
 
@@ -40,12 +44,19 @@ const createLogger = (): winston.Logger => {
 
     // Requirement: Security Monitoring - Add CloudWatch transport in production
     if (NODE_ENV === 'production') {
+        // Lazy-load the transport ONLY in production (see the module-scope note above). The
+        // `typeof import(...)` annotation is a compile-time-only type query (fully erased at
+        // runtime), so it preserves full type-checking of the constructor options without
+        // triggering the eager AWS SDK load. winston-cloudwatch uses `export =`, so the type
+        // query resolves to its constructor type.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const WinstonCloudWatch = require('winston-cloudwatch') as typeof import('winston-cloudwatch');
         transports.push(
             new WinstonCloudWatch({
                 logGroupName: '/pantrychef/backend',
                 logStreamName: `${NODE_ENV}-${new Date().toISOString()}`,
                 awsRegion: process.env.AWS_REGION,
-                messageFormatter: ({ level, message, metadata }) => 
+                messageFormatter: ({ level, message, metadata }) =>
                     JSON.stringify({ level, message, ...metadata })
             })
         );
@@ -65,8 +76,16 @@ const createLogger = (): winston.Logger => {
 // Create singleton logger instance
 export const logger = createLogger();
 
+// Requirement: System Monitoring - Named, level-bound log helpers for direct import.
+// These mirror the bound methods exposed on the default export below so that consumers
+// (e.g. errors.ts, error.middleware.ts, email.service.ts) can `import { error, warn, info }`
+// by name. They are bound to the singleton so `this` resolves correctly when invoked.
+export const error = logger.error.bind(logger);
+export const warn = logger.warn.bind(logger);
+export const info = logger.info.bind(logger);
+
 // Requirement: Error Tracking - Standardized error logging with context
-export const logError = (error: Error, context: string): void => {
+export const logError = (error: Error, context: string | Record<string, unknown>): void => {
     const errorDetails = {
         message: error.message,
         stack: error.stack,

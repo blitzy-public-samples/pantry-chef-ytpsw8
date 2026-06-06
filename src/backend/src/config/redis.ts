@@ -21,9 +21,12 @@ dotenv.config();
 
 // Environment variables with defaults
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
-const REDIS_PORT = parseInt(process.env.REDIS_PORT) || 6379;
+// `process.env.*` is `string | undefined` under strict mode; coalesce to '' so parseInt
+// always receives a string. The `|| <default>` tail preserves the original fallback for
+// undefined/empty/unparseable values.
+const REDIS_PORT = parseInt(process.env.REDIS_PORT ?? '', 10) || 6379;
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD;
-const REDIS_DB = parseInt(process.env.REDIS_DB) || 0;
+const REDIS_DB = parseInt(process.env.REDIS_DB ?? '', 10) || 0;
 const REDIS_CLUSTER_MODE = process.env.REDIS_CLUSTER_MODE === 'true';
 
 // Requirement: Cache Layer - Redis configuration object with connection parameters
@@ -45,7 +48,9 @@ const clusterOptions = {
     maxRedirections: 6,
     retryDelayOnFailover: 100,
     retryDelayOnClusterDown: 100,
-    scaleReads: 'slave'
+    // `as const` keeps the literal type 'slave' (a valid ioredis NodeRole) instead of
+    // widening to `string`, which is not assignable to ClusterOptions.scaleReads.
+    scaleReads: 'slave' as const
 };
 
 // Requirement: Performance Optimization - Redis client configuration with retry strategy
@@ -87,7 +92,11 @@ export const createRedisClient = (): Redis => {
                         ...clientOptions
                     }
                 }
-            );
+                // ioredis `Cluster` and `Redis` share the command API this module and its
+                // consumers use, but `Cluster` is not a structural subtype of `Redis`. The
+                // cluster branch only runs when REDIS_CLUSTER_MODE is enabled (never in tests),
+                // so the assertion is runtime-safe and keeps the `Redis` return contract intact.
+            ) as unknown as Redis;
         } else {
             // Requirement: Performance Optimization - Standalone Redis configuration
             client = new Redis({

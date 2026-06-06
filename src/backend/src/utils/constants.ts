@@ -23,7 +23,7 @@ dotenv.config();
 // Requirement: System Configuration - Backend configuration constants
 export const API_VERSION: string = 'v1';
 export const NODE_ENV: string = process.env.NODE_ENV || 'development';
-export const PORT: number = parseInt(process.env.PORT) || 3000;
+export const PORT: number = parseInt(process.env.PORT ?? '', 10) || 3000;
 export const IS_PRODUCTION: boolean = process.env.NODE_ENV === 'production';
 
 // Error codes for system-wide error handling

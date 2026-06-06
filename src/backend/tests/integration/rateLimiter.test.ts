@@ -1,6 +1,5 @@
 // @version jest ^29.0.0
 // @version supertest ^6.0.0
-// @version mongodb-memory-server ^8.0.0
 
 /**
  * HUMAN TASKS:
@@ -36,16 +35,14 @@
 
 import request from 'supertest';
 import express, { Request, Response, NextFunction } from 'express';
-import { MongoMemoryServer } from 'mongodb-memory-server';
-import mongoose from 'mongoose';
 import { imageUploadLimiter, recipeMatchLimiter } from '../../src/api/middlewares/rateLimiter.middleware';
 import { errorHandler } from '../../src/api/middlewares/error.middleware';
 import { CacheService } from '../../src/services/cache.service';
 
 describe('Rate Limiter Integration Tests', () => {
-    // In-memory MongoDB lifecycle parity with the canonical pantry.test.ts template. The limiters do not touch
-    // Mongo, but spinning it up keeps module-load expectations and teardown semantics identical across the suite.
-    let mongoServer: MongoMemoryServer;
+    // The limiters and CacheService are backed solely by Redis; this suite deliberately does NOT
+    // start MongoDB (mongodb-memory-server). The limiters never touch Mongo, and an in-process
+    // mongod adds a brittle dependency on a host OpenSSL 1.1 runtime that is unnecessary here.
 
     // Real CacheService (zero-arg constructor → internal createRedisClient()). Used purely to perform a
     // best-effort keyspace reset between scenarios via clear(<keyPrefix>*); the limiter's own store shares the
@@ -92,17 +89,14 @@ describe('Rate Limiter Integration Tests', () => {
         return harness;
     };
 
-    beforeAll(async () => {
-        // Lifecycle parity with pantry.test.ts (the canonical template).
-        mongoServer = await MongoMemoryServer.create();
-        await mongoose.connect(mongoServer.getUri());
+    beforeAll(() => {
+        // Only the Redis-backed CacheService is needed (used for best-effort keyspace resets).
+        // The limiter instances open their own Redis connections internally via createRedisClient().
         cacheService = new CacheService();
     });
 
-    afterAll(async () => {
-        await mongoose.disconnect();
-        await mongoServer.stop();
-    });
+    // No afterAll: CacheService/the limiters expose no public disconnect, so their Redis handles
+    // are released by `--forceExit` (the mandated command), per the HUMAN TASKS note above.
 
     beforeEach(async () => {
         // Best-effort reset so counters do not bleed between the two scenarios. The limiter `keyPrefix` is part of

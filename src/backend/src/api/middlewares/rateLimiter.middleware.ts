@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express'; // ^4.18.0
-import { RateLimiterRedis } from 'rate-limiter-flexible'; // ^2.4.1
+import { RateLimiterRedis, RateLimiterRes } from 'rate-limiter-flexible'; // ^2.4.1
 import { AppError } from '../../utils/errors';
 import { createRedisClient } from '../../config/redis';
 
@@ -53,11 +53,12 @@ const createRateLimiter = (options: {
             })
         });
     } catch (error) {
+        // `error` is typed `unknown` under strict mode; narrow before reading `.message`.
         throw new AppError(
             'Failed to initialize rate limiter',
             500,
             'RATE_LIMITER_INIT_ERROR',
-            { error: error.message }
+            { error: error instanceof Error ? error.message : String(error) }
         );
     }
 };
@@ -76,8 +77,10 @@ export const rateLimiterMiddleware = (options: {
 
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
-            // Extract client identifier (IP address or user ID if authenticated)
-            const clientId = (req.user?.id || req.ip).replace(/:/g, '');
+            // Extract client identifier (IP address or user ID if authenticated).
+            // `req.user?.id` and `req.ip` are both `string | undefined`; fall back to a
+            // sentinel so the value is always a defined string before `.replace(...)`.
+            const clientId = (req.user?.id ?? req.ip ?? 'unknown').replace(/:/g, '');
             
             // Check rate limit status for client
             const rateLimitResult = await rateLimiter.consume(clientId);
@@ -92,7 +95,11 @@ export const rateLimiterMiddleware = (options: {
 
             next();
         } catch (error) {
-            if (error.remainingPoints !== undefined) {
+            // On a limit breach, rate-limiter-flexible rejects with a `RateLimiterRes`
+            // instance (carrying msBeforeNext/remainingPoints); any other rejection is a
+            // genuine limiter/Redis failure. The `instanceof` guard narrows `error` (typed
+            // `unknown` under strict mode) so its numeric fields are type-safe to read.
+            if (error instanceof RateLimiterRes) {
                 // Rate limit exceeded error
                 // Set the HTTP Retry-After header (seconds) before throwing so the 429 response
                 // carries it directly; the global errorHandler only embeds retryAfter in the JSON body.
@@ -110,12 +117,12 @@ export const rateLimiterMiddleware = (options: {
                 );
             }
 
-            // Other rate limiter errors
+            // Other rate limiter errors; narrow `unknown` before reading `.message`.
             throw new AppError(
                 'Rate limiting error',
                 500,
                 'RATE_LIMITER_ERROR',
-                { error: error.message }
+                { error: error instanceof Error ? error.message : String(error) }
             );
         }
     };
