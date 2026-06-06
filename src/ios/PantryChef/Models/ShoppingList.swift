@@ -11,7 +11,7 @@ import Foundation // iOS 13.0+
 
 // MARK: - Shopping List Item Model
 @objc
-class ShoppingListItem: NSObject {
+class ShoppingListItem: NSObject, Codable {
     // MARK: - Properties
     let id: String
     let name: String
@@ -19,6 +19,30 @@ class ShoppingListItem: NSObject {
     let unit: String
     var isPurchased: Bool
     var notes: String?
+
+    // MARK: - Cross-Platform Contract Fields
+    // Additive fields that align this iOS item with the canonical server/web
+    // `ShoppingListItem` contract (src/web/src/interfaces/shopping.interface.ts).
+    // Declared `var` with defaults so the existing designated initializer
+    // `init(name:quantity:unit:)` (which does not set them) stays valid, and so
+    // they can be carried over when an item is reconstructed in
+    // `ShoppingList.updateItemQuantity(itemId:newQuantity:)`.
+    var category: String = ""
+    var recipeId: String? = nil
+    var recipeName: String? = nil
+
+    // MARK: - Codable Coding Keys
+    // Explicit key mapping bridges iOS naming to the cross-platform contract
+    // WITHOUT schema drift: the server/web field is `checked`, while iOS keeps
+    // `isPurchased`. Multi-word keys use their camelCase rawValue so they match
+    // the server's snake_case (`recipe_id`, `recipe_name`) AFTER the shared
+    // JSONDecoder applies `.convertFromSnakeCase` (see NetworkService.swift).
+    enum CodingKeys: String, CodingKey {
+        case id, name, quantity, unit, category, notes
+        case isPurchased = "checked"   // server/web uses `checked`; iOS uses `isPurchased`
+        case recipeId                  // matches server `recipe_id` after .convertFromSnakeCase
+        case recipeName                // matches server `recipe_name` after .convertFromSnakeCase
+    }
     
     // MARK: - Initialization
     init(name: String, quantity: Double, unit: String) {
@@ -44,12 +68,50 @@ class ShoppingListItem: NSObject {
     func togglePurchased() {
         isPurchased = !isPurchased
     }
+
+    // MARK: - Codable Conformance
+
+    /// Decodes a `ShoppingListItem` from a server/web JSON payload.
+    /// Marked `required` because the class is non-final and must satisfy the
+    /// `Decodable` initializer requirement for any subclass. Every stored
+    /// property is assigned before `super.init()`. `decodeIfPresent` with
+    /// sensible defaults keeps decoding resilient to partial payloads (the
+    /// server may omit optional or iOS-irrelevant fields).
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        self.name = try container.decode(String.self, forKey: .name)
+        self.quantity = try container.decodeIfPresent(Double.self, forKey: .quantity) ?? 0
+        self.unit = try container.decodeIfPresent(String.self, forKey: .unit) ?? ""
+        self.category = try container.decodeIfPresent(String.self, forKey: .category) ?? ""
+        self.isPurchased = try container.decodeIfPresent(Bool.self, forKey: .isPurchased) ?? false
+        self.notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        self.recipeId = try container.decodeIfPresent(String.self, forKey: .recipeId)
+        self.recipeName = try container.decodeIfPresent(String.self, forKey: .recipeName)
+        super.init()
+    }
+
+    /// Encodes the item back to the cross-platform contract. `isPurchased` is
+    /// emitted under the `checked` key (per `CodingKeys`); optional fields use
+    /// `encodeIfPresent` so absent values are omitted rather than encoded as null.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(quantity, forKey: .quantity)
+        try container.encode(unit, forKey: .unit)
+        try container.encode(category, forKey: .category)
+        try container.encode(isPurchased, forKey: .isPurchased)   // emits `checked`
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(recipeId, forKey: .recipeId)
+        try container.encodeIfPresent(recipeName, forKey: .recipeName)
+    }
 }
 
 // MARK: - Shopping List Model
 @objc
 @objcMembers
-class ShoppingList: NSObject {
+class ShoppingList: NSObject, Codable {
     // MARK: - Properties
     let id: String
     let name: String
@@ -59,6 +121,23 @@ class ShoppingList: NSObject {
     let createdAt: Date
     private(set) var updatedAt: Date
     var completedAt: Date?
+
+    // MARK: - Cross-Platform Contract Fields
+    // Optional generation options mirroring the server contract's
+    // `IShoppingListGenerationOptions`. Optional with a `nil` default so the
+    // existing designated initializer stays valid and so server payloads that
+    // omit it decode without error.
+    var generationOptions: ShoppingListGenerationOptions? = nil
+
+    // MARK: - Codable Coding Keys
+    // All camelCase rawValues. Multi-word keys (userId, createdAt, updatedAt,
+    // completedAt, generationOptions) match the server's snake_case AFTER the
+    // shared JSONDecoder applies `.convertFromSnakeCase`. `isCompleted` and
+    // `completedAt` are iOS-only convenience fields (not in the web contract);
+    // they round-trip locally and decode defensively when absent.
+    enum CodingKeys: String, CodingKey {
+        case id, name, userId, items, isCompleted, createdAt, updatedAt, completedAt, generationOptions
+    }
     
     // MARK: - Initialization
     init(id: String, name: String, userId: String) {
@@ -136,6 +215,9 @@ class ShoppingList: NSObject {
         let updatedItem = ShoppingListItem(name: item.name, quantity: newQuantity, unit: item.unit)
         updatedItem.isPurchased = item.isPurchased
         updatedItem.notes = item.notes
+        updatedItem.category = item.category
+        updatedItem.recipeId = item.recipeId
+        updatedItem.recipeName = item.recipeName
         
         if let index = items.firstIndex(where: { $0.id == itemId }) {
             items[index] = updatedItem
@@ -153,6 +235,49 @@ class ShoppingList: NSObject {
         completedAt = Date()
         updatedAt = Date()
     }
+
+    // MARK: - Codable Conformance
+
+    /// Decodes a `ShoppingList` from a server/web JSON payload.
+    /// Marked `required` because the class is non-final and must satisfy the
+    /// `Decodable` initializer requirement. Core identity fields (`id`, `name`,
+    /// `userId`) are required; the items collection and iOS-only fields default
+    /// defensively so partial payloads never throw. Every stored property is
+    /// assigned before `super.init()`. The `private(set)` setters for `items`
+    /// and `updatedAt` are writable here because this initializer is defined
+    /// within the type that declares them.
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.userId = try container.decode(String.self, forKey: .userId)
+        self.items = try container.decodeIfPresent([ShoppingListItem].self, forKey: .items) ?? []
+        self.isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        self.completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt)
+        self.generationOptions = try container.decodeIfPresent(
+            ShoppingListGenerationOptions.self,
+            forKey: .generationOptions
+        )
+        super.init()
+    }
+
+    /// Encodes the list to the cross-platform contract. Optional fields
+    /// (`completedAt`, `generationOptions`) use `encodeIfPresent` so absent
+    /// values are omitted rather than encoded as null.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(userId, forKey: .userId)
+        try container.encode(items, forKey: .items)
+        try container.encode(isCompleted, forKey: .isCompleted)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encodeIfPresent(completedAt, forKey: .completedAt)
+        try container.encodeIfPresent(generationOptions, forKey: .generationOptions)
+    }
 }
 
 // MARK: - Equatable
@@ -167,4 +292,20 @@ extension ShoppingList: CustomStringConvertible {
     var description: String {
         return "ShoppingList(id: \(id), name: \(name), items: \(items.count))"
     }
+}
+
+// MARK: - Shopping List Generation Options
+// Value type mirroring the canonical `IShoppingListGenerationOptions` contract
+// (src/web/src/interfaces/shopping.interface.ts). Declared as a `Codable`
+// struct following the in-repo precedent for value types in `User.swift`
+// (e.g. `UserPreferences`, `NotificationSettings`). Auto-synthesized `Codable`
+// is sufficient here: with the shared decoder's `.convertFromSnakeCase`
+// strategy, the server keys `recipe_ids`, `exclude_inventory_items`, and
+// `merge_duplicates` map to `recipeIds`, `excludeInventoryItems`, and
+// `mergeDuplicates` respectively.
+struct ShoppingListGenerationOptions: Codable {
+    var recipeIds: [String]
+    var servings: Int            // `Int` is sufficient; the web contract uses `number`
+    var excludeInventoryItems: Bool
+    var mergeDuplicates: Bool
 }
