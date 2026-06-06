@@ -32,9 +32,14 @@ export const createShoppingListValidation = [
 
   body('items').optional().isArray().withMessage('Items must be an array'),
 
-  // Element-shape checks (only evaluated when items[] is present)
+  // Element-shape checks (only evaluated when items[] is present).
+  // Every user-controlled item string is trimmed AND HTML-escaped so that
+  // markup-like values can neither be persisted nor later replayed by the
+  // web/iOS clients (stored-XSS / dirty-data defense), mirroring the top-level
+  // `name` sanitizer above and the pantry/recipe validator conventions.
   body('items.*.name')
     .trim()
+    .escape()
     .notEmpty()
     .withMessage('Shopping list item name is required')
     .isLength({ max: 100 })
@@ -44,9 +49,43 @@ export const createShoppingListValidation = [
     .isFloat({ min: 0 })
     .withMessage('Item quantity must be a non-negative number'),
 
-  // Recommended optional element checks aligned to IShoppingListItem
-  // (kept optional so partially-specified items still pass validation)
-  body('items.*.unit').optional().trim().escape(),
+  // Optional element strings aligned to IShoppingListItem. Each is optional so
+  // partially-specified items still pass, but when present it is trimmed,
+  // escaped, and length-bounded to neutralize malicious or oversized input.
+  body('items.*.unit')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 50 })
+    .withMessage('Item unit cannot exceed 50 characters'),
+
+  body('items.*.category')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 100 })
+    .withMessage('Item category cannot exceed 100 characters'),
+
+  body('items.*.notes')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 500 })
+    .withMessage('Item notes cannot exceed 500 characters'),
+
+  body('items.*.recipeId')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 100 })
+    .withMessage('Item recipeId cannot exceed 100 characters'),
+
+  body('items.*.recipeName')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 200 })
+    .withMessage('Item recipeName cannot exceed 200 characters'),
 
   body('items.*.checked').optional().isBoolean().withMessage('Item checked flag must be a boolean'),
 ];
@@ -70,6 +109,7 @@ export const updateShoppingListValidation = [
   body('items.*.name')
     .optional()
     .trim()
+    .escape()
     .notEmpty()
     .withMessage('Shopping list item name is required')
     .isLength({ max: 100 })
@@ -79,6 +119,44 @@ export const updateShoppingListValidation = [
     .optional()
     .isFloat({ min: 0 })
     .withMessage('Item quantity must be a non-negative number'),
+
+  // Optional item strings on partial update: trimmed, escaped, and
+  // length-bounded so the same sanitization as creation applies whenever the
+  // field is present, preventing stored-XSS / dirty-data via PUT.
+  body('items.*.unit')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 50 })
+    .withMessage('Item unit cannot exceed 50 characters'),
+
+  body('items.*.category')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 100 })
+    .withMessage('Item category cannot exceed 100 characters'),
+
+  body('items.*.notes')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 500 })
+    .withMessage('Item notes cannot exceed 500 characters'),
+
+  body('items.*.recipeId')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 100 })
+    .withMessage('Item recipeId cannot exceed 100 characters'),
+
+  body('items.*.recipeName')
+    .optional()
+    .trim()
+    .escape()
+    .isLength({ max: 200 })
+    .withMessage('Item recipeName cannot exceed 200 characters'),
 
   body('items.*.checked').optional().isBoolean().withMessage('Item checked flag must be a boolean'),
 ];

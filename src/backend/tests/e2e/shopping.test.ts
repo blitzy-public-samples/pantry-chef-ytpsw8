@@ -40,12 +40,13 @@ let secondUserId: string;
 let testListId: string;
 let testItemId: string;
 
-// Router is mounted at /api/v1/shopping-lists. The GET list handler is registered
-// as `router.get('/shopping-lists', ...)`, so the effective list path is DOUBLED.
-// There is intentionally NO GET-by-id route — ownership isolation is exercised
-// through PUT / DELETE / PATCH(toggle) instead.
+// Router is mounted at /api/v1/shopping-lists. Per the authoritative web/API
+// contract (src/web/src/services/shopping.service.ts), the GET list handler is
+// registered at the router root, so the effective list path is the SINGLE-segment
+// /api/v1/shopping-lists. There is intentionally NO GET-by-id route — ownership
+// isolation is exercised through PUT / DELETE / PATCH(toggle) instead.
 const BASE = '/api/v1/shopping-lists';
-const LIST_PATH = `${BASE}/shopping-lists`; // VERBATIM doubled path (the registered GET route)
+const LIST_PATH = BASE; // authoritative single-segment list path
 
 // IDs serialize as `_id` (the shopping model uses { timestamps: true } with no
 // toJSON virtual/transform), so the Mongoose `id` virtual is not present in JSON.
@@ -118,6 +119,11 @@ beforeAll(async () => {
 afterAll(async () => {
   // Do NOT call mongoose.connect() anywhere in this suite — initializeApp() already
   // connected the default connection; here we simply tear it down and stop the server.
+  // initializeApp() also created a Redis client at app.locals.redis (used by
+  // CacheService for every shopping operation); close it so the open handle does
+  // not keep Jest alive (open-handle hang / flakiness). Optional chaining keeps
+  // teardown safe even if beforeAll bailed before the app was configured.
+  await configuredApp?.locals?.redis?.quit?.();
   await mongoose.disconnect();
   if (mongoServer) {
     await mongoServer.stop();
@@ -164,7 +170,7 @@ describe('Shopping List API (e2e)', () => {
     });
   });
 
-  describe('GET /api/v1/shopping-lists/shopping-lists (list — doubled verbatim path)', () => {
+  describe('GET /api/v1/shopping-lists (list)', () => {
     it('returns 200 + array', async () => {
       const res = await request(configuredApp)
         .get(LIST_PATH)

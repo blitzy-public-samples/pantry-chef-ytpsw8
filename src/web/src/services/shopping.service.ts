@@ -30,6 +30,20 @@ const SHOPPING_API = {
 };
 
 /**
+ * Backend unified success envelope. Every shopping-list endpoint wraps its
+ * payload as `{ success, data, metadata }` (see the backend recipe/user/image
+ * controllers and the shopping e2e suite). The service unwraps `data` so its
+ * callers — the Redux `shoppingSlice` thunks — receive domain objects
+ * (`ShoppingList[]`, `ShoppingList`, `ShoppingListItem`), never the transport
+ * envelope.
+ */
+interface ApiEnvelope<T> {
+  success: boolean;
+  data: T;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * Service module implementing shopping list management functionality
  * Requirement: Shopping List Management (8.1 User Interface Design/Screen Components)
  */
@@ -40,24 +54,32 @@ const ShoppingService = {
    */
   async getShoppingLists(): Promise<ShoppingList[]> {
     try {
-      const response = await apiClient.get<ShoppingList[]>(SHOPPING_API.LISTS);
-      return response.data;
+      const response = await apiClient.get<ApiEnvelope<ShoppingList[]>>(SHOPPING_API.LISTS);
+      // Unwrap the unified backend envelope { success, data, metadata }.
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
   },
 
   /**
-   * Retrieves a specific shopping list by ID
+   * Retrieves a specific shopping list by ID.
    * Requirement: Shopping List Management
+   *
+   * The API route contract exposes NO GET-by-id endpoint for shopping lists
+   * (the six routes are GET /, POST /, PUT /:id, DELETE /:id, POST /:id/generate,
+   * and PATCH /:id/items/:itemId/toggle). To honor that contract without calling
+   * an unsupported route, this fetches the user's list collection and selects the
+   * matching list client-side. `getShoppingLists()` already unwraps the envelope
+   * and maps transport errors, so only the not-found case is added here.
    */
   async getShoppingList(id: string): Promise<ShoppingList> {
-    try {
-      const response = await apiClient.get<ShoppingList>(`${SHOPPING_API.LISTS}/${id}`);
-      return response.data;
-    } catch (error) {
-      throw handleApiError(error as AxiosError);
+    const lists = await ShoppingService.getShoppingLists();
+    const match = lists.find((list) => list.id === id);
+    if (!match) {
+      throw new Error(`Shopping list ${id} not found`);
     }
+    return match;
   },
 
   /**
@@ -66,8 +88,8 @@ const ShoppingService = {
    */
   async createShoppingList(data: Partial<ShoppingList>): Promise<ShoppingList> {
     try {
-      const response = await apiClient.post<ShoppingList>(SHOPPING_API.LISTS, data);
-      return response.data;
+      const response = await apiClient.post<ApiEnvelope<ShoppingList>>(SHOPPING_API.LISTS, data);
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
@@ -79,8 +101,8 @@ const ShoppingService = {
    */
   async updateShoppingList(id: string, data: Partial<ShoppingList>): Promise<ShoppingList> {
     try {
-      const response = await apiClient.put<ShoppingList>(`${SHOPPING_API.LISTS}/${id}`, data);
-      return response.data;
+      const response = await apiClient.put<ApiEnvelope<ShoppingList>>(`${SHOPPING_API.LISTS}/${id}`, data);
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
@@ -102,11 +124,17 @@ const ShoppingService = {
    * Generates a shopping list from selected recipes
    * Requirement: Shopping List Generation (1.2 Scope/Core Capabilities)
    */
-  async generateShoppingList(options: ShoppingListGenerationOptions, id?: string): Promise<ShoppingList> {
+  async generateShoppingList(id: string, options: ShoppingListGenerationOptions): Promise<ShoppingList> {
+    // The generate route is POST /:id/generate, so a real list id is REQUIRED.
+    // Guarding here prevents building a doubled-slash URL
+    // (`/api/v1/shopping-lists//generate`) that would miss the backend route.
+    if (!id) {
+      throw new Error('A shopping list id is required to generate a shopping list');
+    }
     try {
-      const endpoint = SHOPPING_API.GENERATE.replace(':id', id ?? '');
-      const response = await apiClient.post<ShoppingList>(endpoint, options);
-      return response.data;
+      const endpoint = SHOPPING_API.GENERATE.replace(':id', id);
+      const response = await apiClient.post<ApiEnvelope<ShoppingList>>(endpoint, options);
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
@@ -125,8 +153,8 @@ const ShoppingService = {
       const endpoint = SHOPPING_API.TOGGLE
         .replace(':id', listId)
         .replace(':itemId', itemId);
-      const response = await apiClient.patch<ShoppingListItem>(endpoint, data);
-      return response.data;
+      const response = await apiClient.patch<ApiEnvelope<ShoppingListItem>>(endpoint, data);
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }

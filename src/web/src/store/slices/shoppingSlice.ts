@@ -121,9 +121,14 @@ export const deleteShoppingList = createAsyncThunk(
  */
 export const generateShoppingList = createAsyncThunk(
   'shopping/generateShoppingList',
-  async (options: ShoppingListGenerationOptions, { rejectWithValue }) => {
+  async (
+    { id, options }: { id: string; options: ShoppingListGenerationOptions },
+    { rejectWithValue }
+  ) => {
     try {
-      return await ShoppingService.generateShoppingList(options);
+      // The generate route is POST /:id/generate, so the target list id is
+      // threaded through to the service alongside the generation options.
+      return await ShoppingService.generateShoppingList(id, options);
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }

@@ -14,6 +14,20 @@ import {
   ShoppingListGenerationOptions 
 } from '../../src/interfaces/shopping.interface';
 
+// Wraps a payload in the backend's unified success envelope { success, data,
+// metadata }. The service unwraps `.data.data`, so success mocks must use this.
+function envelope<T>(data: T) {
+  return { success: true, data, metadata: {} };
+}
+
+// axios-mock-adapter serializes every reply body through JSON, so `Date` fields
+// (createdAt/updatedAt) round-trip back as ISO strings — exactly as the real
+// HTTP API returns them and as the service (which does not re-hydrate dates)
+// surfaces them. Normalize expected fixtures the same way before deep-equality.
+function serialized<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
 describe('ShoppingService', () => {
   let mockApi: MockAdapter;
 
@@ -68,34 +82,36 @@ describe('ShoppingService', () => {
   describe('getShoppingLists', () => {
     it('should fetch all shopping lists successfully', async () => {
       // Requirement: Shopping List Management
-      mockApi.onGet('/api/v1/shopping/lists').reply(200, [mockShoppingList]);
+      mockApi.onGet('/api/v1/shopping-lists').reply(200, envelope([mockShoppingList]));
 
       const result = await ShoppingService.getShoppingLists();
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual(mockShoppingList);
+      expect(result[0]).toEqual(serialized(mockShoppingList));
     });
 
     it('should handle error when fetching shopping lists fails', async () => {
-      mockApi.onGet('/api/v1/shopping/lists').reply(500);
+      mockApi.onGet('/api/v1/shopping-lists').reply(500);
 
       await expect(ShoppingService.getShoppingLists()).rejects.toThrow('Internal server error');
     });
   });
 
   // Test: getShoppingList
+  // The API contract has NO GET-by-id route; the service fetches the list
+  // collection (GET /api/v1/shopping-lists) and selects the match client-side.
   describe('getShoppingList', () => {
     it('should fetch a specific shopping list by ID', async () => {
       // Requirement: Shopping List Management
-      mockApi.onGet('/api/v1/shopping/lists/list1').reply(200, mockShoppingList);
+      mockApi.onGet('/api/v1/shopping-lists').reply(200, envelope([mockShoppingList]));
 
       const result = await ShoppingService.getShoppingList('list1');
-      expect(result).toEqual(mockShoppingList);
+      expect(result).toEqual(serialized(mockShoppingList));
     });
 
-    it('should handle non-existent list ID', async () => {
-      mockApi.onGet('/api/v1/shopping/lists/nonexistent').reply(404);
+    it('should throw when the list ID does not exist in the collection', async () => {
+      mockApi.onGet('/api/v1/shopping-lists').reply(200, envelope([mockShoppingList]));
 
-      await expect(ShoppingService.getShoppingList('nonexistent')).rejects.toThrow('Resource not found');
+      await expect(ShoppingService.getShoppingList('nonexistent')).rejects.toThrow('not found');
     });
   });
 
@@ -104,17 +120,19 @@ describe('ShoppingService', () => {
     it('should create a new shopping list successfully', async () => {
       // Requirement: Shopping List Management
       const newList = { name: 'New List', items: [] };
-      mockApi.onPost('/api/v1/shopping/lists').reply(201, mockShoppingList);
+      mockApi.onPost('/api/v1/shopping-lists').reply(201, envelope(mockShoppingList));
 
       const result = await ShoppingService.createShoppingList(newList);
-      expect(result).toEqual(mockShoppingList);
+      expect(result).toEqual(serialized(mockShoppingList));
     });
 
     it('should handle validation errors during list creation', async () => {
       const invalidList = { items: 'invalid' };
-      mockApi.onPost('/api/v1/shopping/lists').reply(400, { message: 'Invalid list data' });
+      mockApi.onPost('/api/v1/shopping-lists').reply(400, { message: 'Invalid list data' });
 
-      await expect(ShoppingService.createShoppingList(invalidList)).rejects.toThrow('Invalid request');
+      // handleApiError surfaces the server-provided `message` for 400s
+      // (falling back to a generic 'Invalid request' only when absent).
+      await expect(ShoppingService.createShoppingList(invalidList)).rejects.toThrow('Invalid list data');
     });
   });
 
@@ -123,7 +141,7 @@ describe('ShoppingService', () => {
     it('should update an existing shopping list', async () => {
       // Requirement: Shopping List Management
       const updates = { name: 'Updated List' };
-      mockApi.onPut('/api/v1/shopping/lists/list1').reply(200, { ...mockShoppingList, ...updates });
+      mockApi.onPut('/api/v1/shopping-lists/list1').reply(200, envelope({ ...mockShoppingList, ...updates }));
 
       const result = await ShoppingService.updateShoppingList('list1', updates);
       expect(result.name).toBe('Updated List');
@@ -131,7 +149,7 @@ describe('ShoppingService', () => {
 
     it('should handle partial updates correctly', async () => {
       const partialUpdate = { items: [{ ...mockShoppingListItem, checked: true }] };
-      mockApi.onPut('/api/v1/shopping/lists/list1').reply(200, { ...mockShoppingList, ...partialUpdate });
+      mockApi.onPut('/api/v1/shopping-lists/list1').reply(200, envelope({ ...mockShoppingList, ...partialUpdate }));
 
       const result = await ShoppingService.updateShoppingList('list1', partialUpdate);
       expect(result.items[0].checked).toBe(true);
@@ -142,13 +160,13 @@ describe('ShoppingService', () => {
   describe('deleteShoppingList', () => {
     it('should delete a shopping list successfully', async () => {
       // Requirement: Shopping List Management
-      mockApi.onDelete('/api/v1/shopping/lists/list1').reply(204);
+      mockApi.onDelete('/api/v1/shopping-lists/list1').reply(204);
 
       await expect(ShoppingService.deleteShoppingList('list1')).resolves.not.toThrow();
     });
 
     it('should handle deletion of non-existent list', async () => {
-      mockApi.onDelete('/api/v1/shopping/lists/nonexistent').reply(404);
+      mockApi.onDelete('/api/v1/shopping-lists/nonexistent').reply(404);
 
       await expect(ShoppingService.deleteShoppingList('nonexistent')).rejects.toThrow('Resource not found');
     });
@@ -158,10 +176,10 @@ describe('ShoppingService', () => {
   describe('generateShoppingList', () => {
     it('should generate shopping list from recipes', async () => {
       // Requirement: Shopping List Generation
-      mockApi.onPost('/api/v1/shopping/generate').reply(200, mockShoppingList);
+      mockApi.onPost('/api/v1/shopping-lists/list1/generate').reply(201, envelope(mockShoppingList));
 
-      const result = await ShoppingService.generateShoppingList(mockGenerationOptions);
-      expect(result).toEqual(mockShoppingList);
+      const result = await ShoppingService.generateShoppingList('list1', mockGenerationOptions);
+      expect(result).toEqual(serialized(mockShoppingList));
     });
 
     it('should handle recipe-based quantity calculations', async () => {
@@ -170,22 +188,31 @@ describe('ShoppingService', () => {
         ...mockShoppingList,
         items: [{ ...mockShoppingListItem, quantity: 3 }]
       };
-      mockApi.onPost('/api/v1/shopping/generate').reply(200, adjustedList);
+      mockApi.onPost('/api/v1/shopping-lists/list1/generate').reply(201, envelope(adjustedList));
 
-      const result = await ShoppingService.generateShoppingList(optionsWithServings);
+      const result = await ShoppingService.generateShoppingList('list1', optionsWithServings);
       expect(result.items[0].quantity).toBe(3);
+    });
+
+    it('should reject when no list id is supplied (no doubled-slash URL)', async () => {
+      await expect(
+        ShoppingService.generateShoppingList('', mockGenerationOptions)
+      ).rejects.toThrow('id is required');
     });
   });
 
   // Test: updateShoppingListItem
+  // Item updates use the PATCH toggle route from the authoritative contract:
+  // PATCH /api/v1/shopping-lists/:id/items/:itemId/toggle, returning the
+  // unified envelope { success, data, metadata }.
   describe('updateShoppingListItem', () => {
     it('should update a specific shopping list item', async () => {
       // Requirement: Shopping List Management
       const itemUpdate = { checked: true, notes: 'Updated notes' };
-      mockApi.onPut('/api/v1/shopping/lists/list1/items/item1').reply(200, {
+      mockApi.onPatch('/api/v1/shopping-lists/list1/items/item1/toggle').reply(200, envelope({
         ...mockShoppingListItem,
         ...itemUpdate
-      });
+      }));
 
       const result = await ShoppingService.updateShoppingListItem('list1', 'item1', itemUpdate);
       expect(result.checked).toBe(true);
@@ -194,7 +221,9 @@ describe('ShoppingService', () => {
 
     it('should handle invalid item updates', async () => {
       const invalidUpdate = { quantity: -1 };
-      mockApi.onPut('/api/v1/shopping/lists/list1/items/item1').reply(400);
+      // Body is an empty object (no `message`) so handleApiError falls back to
+      // the generic 'Invalid request' message for the 400 branch.
+      mockApi.onPatch('/api/v1/shopping-lists/list1/items/item1/toggle').reply(400, {});
 
       await expect(
         ShoppingService.updateShoppingListItem('list1', 'item1', invalidUpdate)

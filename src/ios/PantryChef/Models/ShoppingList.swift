@@ -34,14 +34,18 @@ class ShoppingListItem: NSObject, Codable {
     // MARK: - Codable Coding Keys
     // Explicit key mapping bridges iOS naming to the cross-platform contract
     // WITHOUT schema drift: the server/web field is `checked`, while iOS keeps
-    // `isPurchased`. Multi-word keys use their camelCase rawValue so they match
-    // the server's snake_case (`recipe_id`, `recipe_name`) AFTER the shared
-    // JSONDecoder applies `.convertFromSnakeCase` (see NetworkService.swift).
+    // `isPurchased`. The canonical server/web contract
+    // (src/web/src/interfaces/shopping.interface.ts) uses camelCase keys, so the
+    // multi-word rawValues below (`recipeId`, `recipeName`) preserve that contract
+    // verbatim. The shared JSONDecoder's `.convertFromSnakeCase` strategy (see
+    // NetworkService.swift) is merely tolerant of snake_case payloads
+    // (`recipe_id`, `recipe_name`) should any ever appear; it is not required for
+    // the canonical camelCase responses.
     enum CodingKeys: String, CodingKey {
         case id, name, quantity, unit, category, notes
         case isPurchased = "checked"   // server/web uses `checked`; iOS uses `isPurchased`
-        case recipeId                  // matches server `recipe_id` after .convertFromSnakeCase
-        case recipeName                // matches server `recipe_name` after .convertFromSnakeCase
+        case recipeId                  // camelCase `recipeId` matches the server/web contract
+        case recipeName                // camelCase `recipeName` matches the server/web contract
     }
     
     // MARK: - Initialization
@@ -130,11 +134,14 @@ class ShoppingList: NSObject, Codable {
     var generationOptions: ShoppingListGenerationOptions? = nil
 
     // MARK: - Codable Coding Keys
-    // All camelCase rawValues. Multi-word keys (userId, createdAt, updatedAt,
-    // completedAt, generationOptions) match the server's snake_case AFTER the
-    // shared JSONDecoder applies `.convertFromSnakeCase`. `isCompleted` and
-    // `completedAt` are iOS-only convenience fields (not in the web contract);
-    // they round-trip locally and decode defensively when absent.
+    // All camelCase rawValues, preserving the canonical server/web contract
+    // verbatim: the multi-word keys (userId, createdAt, updatedAt, completedAt,
+    // generationOptions) are camelCase on the wire. The shared JSONDecoder's
+    // `.convertFromSnakeCase` strategy is only a tolerance for snake_case
+    // payloads should any ever appear; it is not required for the canonical
+    // camelCase responses. `isCompleted` and `completedAt` are iOS-only
+    // convenience fields (not in the web contract); they round-trip locally and
+    // decode defensively when absent.
     enum CodingKeys: String, CodingKey {
         case id, name, userId, items, isCompleted, createdAt, updatedAt, completedAt, generationOptions
     }
@@ -299,10 +306,12 @@ extension ShoppingList: CustomStringConvertible {
 // (src/web/src/interfaces/shopping.interface.ts). Declared as a `Codable`
 // struct following the in-repo precedent for value types in `User.swift`
 // (e.g. `UserPreferences`, `NotificationSettings`). Auto-synthesized `Codable`
-// is sufficient here: with the shared decoder's `.convertFromSnakeCase`
-// strategy, the server keys `recipe_ids`, `exclude_inventory_items`, and
-// `merge_duplicates` map to `recipeIds`, `excludeInventoryItems`, and
-// `mergeDuplicates` respectively.
+// is sufficient here: the canonical server/web contract uses camelCase keys
+// (`recipeIds`, `excludeInventoryItems`, `mergeDuplicates`), which the property
+// names match directly. The shared decoder's `.convertFromSnakeCase` strategy
+// is only a tolerance for snake_case payloads (`recipe_ids`,
+// `exclude_inventory_items`, `merge_duplicates`) should any ever appear; it is
+// not required for the canonical camelCase responses.
 struct ShoppingListGenerationOptions: Codable {
     var recipeIds: [String]
     var servings: Int            // `Int` is sufficient; the web contract uses `number`

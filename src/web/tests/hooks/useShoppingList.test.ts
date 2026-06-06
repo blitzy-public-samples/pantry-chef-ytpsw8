@@ -164,10 +164,10 @@ describe('useShoppingList', () => {
     };
 
     await act(async () => {
-      await result.current.generateList(options);
+      await result.current.generateList('1', options);
     });
 
-    expect(ShoppingService.generateShoppingList).toHaveBeenCalledWith(options);
+    expect(ShoppingService.generateShoppingList).toHaveBeenCalledWith('1', options);
   });
 
   /**
