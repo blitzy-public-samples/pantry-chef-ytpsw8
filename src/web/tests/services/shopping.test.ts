@@ -202,21 +202,26 @@ describe('ShoppingService', () => {
   });
 
   // Test: updateShoppingListItem
-  // Item updates use the PATCH toggle route from the authoritative contract:
-  // PATCH /api/v1/shopping-lists/:id/items/:itemId/toggle, returning the
-  // unified envelope { success, data, metadata }.
+  // The item toggle uses the PATCH route from the authoritative contract
+  // (PATCH /api/v1/shopping-lists/:id/items/:itemId/toggle). The backend answers
+  // with the FULL updated list inside the unified envelope { success, data,
+  // metadata }, so the service resolves to a ShoppingList (aligned with iOS).
   describe('updateShoppingListItem', () => {
-    it('should update a specific shopping list item', async () => {
+    it('should toggle an item and return the full updated shopping list', async () => {
       // Requirement: Shopping List Management
       const itemUpdate = { checked: true, notes: 'Updated notes' };
-      mockApi.onPatch('/api/v1/shopping-lists/list1/items/item1/toggle').reply(200, envelope({
-        ...mockShoppingListItem,
-        ...itemUpdate
-      }));
+      // The toggle route returns the whole list with the target item updated.
+      const toggledList: ShoppingList = {
+        ...mockShoppingList,
+        items: [{ ...mockShoppingListItem, ...itemUpdate }]
+      };
+      mockApi.onPatch('/api/v1/shopping-lists/list1/items/item1/toggle').reply(200, envelope(toggledList));
 
       const result = await ShoppingService.updateShoppingListItem('list1', 'item1', itemUpdate);
-      expect(result.checked).toBe(true);
-      expect(result.notes).toBe('Updated notes');
+      // Service resolves to the full ShoppingList; assert the toggled item within it.
+      expect(result.id).toBe('list1');
+      expect(result.items[0].checked).toBe(true);
+      expect(result.items[0].notes).toBe('Updated notes');
     });
 
     it('should handle invalid item updates', async () => {

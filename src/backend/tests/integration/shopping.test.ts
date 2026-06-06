@@ -38,36 +38,49 @@ import mongoose from 'mongoose';
 import { ShoppingService } from '../../src/services/shopping.service';
 import { CacheService } from '../../src/services/cache.service';
 import { PantryService } from '../../src/services/pantry.service';
+import { QueueService } from '../../src/services/queue.service';
+import { NotificationService } from '../../src/services/notification.service';
 import { ShoppingModel } from '../../src/models/shopping.model';
+import { PantryModel } from '../../src/models/pantry.model';
 import {
   IShoppingList,
   IShoppingListItem,
   IShoppingListGenerationOptions,
 } from '../../src/interfaces/shopping.interface';
-import { Pantry, PantryItem, StorageLocation } from '../../src/interfaces/pantry.interface';
+import { PantryItem, StorageLocation } from '../../src/interfaces/pantry.interface';
 
 /**
- * Mock ONLY the PantryService collaborator via an explicit factory (not the default
- * auto-mock). The System Under Test (the REAL ShoppingService) statically imports
- * PantryService, and — because the backend compiles with `emitDecoratorMetadata` —
- * the ShoppingService constructor parameter type is emitted as a runtime value
- * reference. That reference would otherwise pull the real pantry.service.ts (and,
- * transitively, pantry.model.ts) into the ts-jest transform; those committed files
- * carry pre-existing, out-of-scope compile issues (undeclared custom Mongoose statics
- * on the model and a static-member call made on an instance). The factory keeps the
- * real pantry files out of the transform graph while we hand-inject a typed
- * PantryService double. CacheService and ShoppingModel are deliberately NOT mocked:
+ * Integration realism: the REAL PantryService is exercised end-to-end (no PantryService
+ * double). `ShoppingService.generate()` reads inventory through the actual
+ * `PantryService.getPantry()` -> real `PantryModel` -> in-memory MongoDB path, so pantry
+ * inventory exclusion is validated against a genuinely seeded pantry (not a stub).
+ *
+ * Only the PantryService's transitive *external* collaborators are factory-mocked:
+ * `QueueService` and `NotificationService`. The real PantryService statically imports both,
+ * and — because the backend compiles with `emitDecoratorMetadata` — those constructor
+ * parameter types are emitted as runtime value references that would pull the real
+ * queue.service.ts / notification.service.ts into the ts-jest transform. Those two committed
+ * files carry pre-existing, out-of-scope compile issues (RabbitMQ/Firebase/email typings) and
+ * open real AMQP/Firebase connections on construction. Factory-mocking them keeps the dirty
+ * files out of the transform graph AND avoids opening external connections, while the pantry
+ * read path (`getPantry`) — which touches only CacheService + PantryModel — runs for real.
+ * `getPantry` never calls queue/notification, so empty mock instances fully satisfy the
+ * PantryService constructor. CacheService, ShoppingModel, and PantryModel are NOT mocked:
  * this is an integration test against live Redis + in-memory MongoDB.
  */
-jest.mock('../../src/services/pantry.service', () => ({
-  PantryService: jest.fn(),
+jest.mock('../../src/services/queue.service', () => ({
+  QueueService: jest.fn(),
+}));
+jest.mock('../../src/services/notification.service', () => ({
+  NotificationService: jest.fn(),
 }));
 
 describe('Shopping List Integration Tests', () => {
   let mongoServer: MongoMemoryServer;
   let shoppingService: ShoppingService;
   let cacheService: CacheService;
-  let pantryService: jest.Mocked<PantryService>;
+  // REAL PantryService (not a double): generate() reads inventory through its actual path.
+  let pantryService: PantryService;
 
   // Two distinct users to prove ownership isolation / user-scoping.
   const testUserId = 'shopping-test-user';
@@ -82,11 +95,16 @@ describe('Shopping List Integration Tests', () => {
     // REAL Redis-backed cache (zero-arg constructor -> internal createRedisClient()).
     cacheService = new CacheService();
 
-    // Typed PantryService double. ShoppingService.generate() consumes only
-    // getPantry(userId); the generate test stubs its resolved value with a seeded pantry.
-    pantryService = {
-      getPantry: jest.fn(),
-    } as unknown as jest.Mocked<PantryService>;
+    // REAL PantryService wired with the SAME real CacheService and stand-in external
+    // collaborators (QueueService / NotificationService). The two modules are jest.mock'd with
+    // factories above so their dirty real files are never transformed; the collaborators are
+    // built as empty `{}` casts (rather than `new`) so the test never depends on those
+    // constructors' signatures. getPantry — the only method generate() consumes — touches
+    // CacheService + PantryModel only and never calls queue/notification, so empty doubles fully
+    // satisfy the three-arg PantryService constructor.
+    const queueService = {} as jest.Mocked<QueueService>;
+    const notificationService = {} as jest.Mocked<NotificationService>;
+    pantryService = new PantryService(cacheService, queueService, notificationService);
 
     // REAL System Under Test: two-dependency constructor (CacheService, PantryService).
     shoppingService = new ShoppingService(cacheService, pantryService);
@@ -100,9 +118,13 @@ describe('Shopping List Integration Tests', () => {
   });
 
   beforeEach(async () => {
-    // Reset persistent + cache state before each test for full isolation.
+    // Reset persistent + cache state before each test for full isolation. Both the shopping
+    // and pantry collections + their cache namespaces are cleared because generate() now reads
+    // a REAL seeded pantry through PantryService/PantryModel.
     await ShoppingModel.deleteMany({});
+    await PantryModel.deleteMany({});
     await cacheService.clear('shopping:*');
+    await cacheService.clear('pantry:*');
     jest.clearAllMocks();
   });
 
@@ -138,11 +160,11 @@ describe('Shopping List Integration Tests', () => {
       const first = await shoppingService.getLists(testUserId);
       expect(first).toHaveLength(1);
 
-      // The write-back proves the default-TTL cache path: getLists populated
-      // shopping:<userId> using set(key, value) with NO explicit TTL, so the
-      // CacheService 3600s default applies. We assert the cache is populated, never
-      // an exact TTL value.
-      const cached = await cacheService.get<IShoppingList[]>(`shopping:${testUserId}`);
+      // The write-back proves the default-TTL cache path: getLists populated the per-user,
+      // per-page cache key shopping:<userId>:<page>:<limit> (default window page 1 / limit 50)
+      // using set(key, value) with NO explicit TTL, so the CacheService 3600s default applies.
+      // We assert the cache is populated, never an exact TTL value.
+      const cached = await cacheService.get<IShoppingList[]>(`shopping:${testUserId}:1:50`);
       expect(cached).not.toBeNull();
       expect(cached).toHaveLength(1);
 
@@ -239,16 +261,19 @@ describe('Shopping List Integration Tests', () => {
         expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         notes: '',
       };
-      const seededPantry: Pantry = {
-        id: 'seed-pantry',
+      // Seed a REAL pantry document so getPantry() reads it from MongoDB through the actual
+      // PantryService path (no stub). The on-hand `Recipe r1` (qty 10) fully covers the merged
+      // `Recipe r1` candidate (genuinely excluded), while `Recipe r2` (not stocked) survives.
+      await PantryModel.create({
         userId: testUserId,
         name: 'Test Pantry',
         items: [onHand],
         locations: Object.values(StorageLocation),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      pantryService.getPantry.mockResolvedValue(seededPantry);
+      });
+
+      // Spy on the REAL getPantry to assert it is consulted, while it still runs for real
+      // (jest.spyOn calls through by default, so the seeded pantry is actually read).
+      const getPantrySpy = jest.spyOn(pantryService, 'getPantry');
 
       const options: IShoppingListGenerationOptions = {
         recipeIds: ['r1', 'r1', 'r2'],
@@ -265,8 +290,9 @@ describe('Shopping List Integration Tests', () => {
       expect(generated.generationOptions?.excludeInventoryItems).toBe(true);
       expect(generated.generationOptions?.mergeDuplicates).toBe(true);
 
-      // generate() consulted the pantry for inventory exclusion.
-      expect(pantryService.getPantry).toHaveBeenCalledWith(testUserId);
+      // generate() consulted the REAL pantry service (and thus the seeded PantryModel) for
+      // inventory exclusion.
+      expect(getPantrySpy).toHaveBeenCalledWith(testUserId);
 
       // Genuine exclusion: the fully on-hand `Recipe r1` candidate is dropped, while
       // the non-stocked `Recipe r2` candidate survives.
@@ -294,6 +320,98 @@ describe('Shopping List Integration Tests', () => {
       await expect(shoppingService.getList(secondUserId, created.id)).rejects.toMatchObject({
         statusCode: 404,
       });
+    });
+
+    it('rejects a cross-user update with 404 and leaves the list intact', async () => {
+      const created = await shoppingService.create(testUserId, { name: 'Groceries', items: [] });
+
+      // User B updating user A's list: the { _id, userId } filter yields not-found (404).
+      await expect(
+        shoppingService.update(secondUserId, created.id, { name: 'Hacked' })
+      ).rejects.toMatchObject({ statusCode: 404, code: 'SHOPPING_LIST_NOT_FOUND' });
+
+      // The list is unchanged for its real owner.
+      const stillOwned = await shoppingService.getList(testUserId, created.id);
+      expect(stillOwned.name).toBe('Groceries');
+    });
+
+    it('rejects a cross-user delete with 404 and leaves the list intact', async () => {
+      const created = await shoppingService.create(testUserId, { name: 'Groceries', items: [] });
+
+      await expect(shoppingService.delete(secondUserId, created.id)).rejects.toMatchObject({
+        statusCode: 404,
+        code: 'SHOPPING_LIST_NOT_FOUND',
+      });
+
+      // The owner can still read it (it was not deleted).
+      const stillOwned = await shoppingService.getList(testUserId, created.id);
+      expect(stillOwned.id).toBe(created.id);
+    });
+
+    it('rejects a cross-user toggleItem with 404 and leaves the item unchanged', async () => {
+      const created = await shoppingService.create(testUserId, {
+        name: 'Groceries',
+        items: [
+          { name: 'Milk', quantity: 1, unit: 'L', checked: false },
+        ] as unknown as IShoppingListItem[],
+      });
+      const itemId = created.items[0].id;
+
+      await expect(
+        shoppingService.toggleItem(secondUserId, created.id, itemId)
+      ).rejects.toMatchObject({ statusCode: 404, code: 'SHOPPING_LIST_NOT_FOUND' });
+
+      // The item remains unchecked for the real owner.
+      const ownerList = await shoppingService.getList(testUserId, created.id);
+      const item = ownerList.items.find((candidate) => candidate.id === itemId);
+      expect(item?.checked).toBe(false);
+    });
+
+    it('create: a client-supplied body userId cannot reassign ownership', async () => {
+      // The body attempts to plant the list under a different user; the service must apply the
+      // authenticated userId LAST and ignore the body value.
+      const malicious: Record<string, unknown> = {
+        name: 'Groceries',
+        items: [],
+        userId: secondUserId,
+      };
+      const created = await shoppingService.create(
+        testUserId,
+        malicious as Partial<IShoppingList>
+      );
+
+      // Persisted owner is the AUTHENTICATED user, never the body's userId.
+      expect(created.userId).toBe(testUserId);
+
+      // The impersonated user can neither read it nor see it in their collection.
+      await expect(shoppingService.getList(secondUserId, created.id)).rejects.toMatchObject({
+        statusCode: 404,
+      });
+      const victimLists = await shoppingService.getLists(secondUserId);
+      expect(victimLists).toHaveLength(0);
+    });
+
+    it('update: a client-supplied body userId cannot transfer ownership', async () => {
+      const created = await shoppingService.create(testUserId, { name: 'Groceries', items: [] });
+
+      // The body attempts to hand the list to another user while renaming it.
+      const malicious: Record<string, unknown> = {
+        name: 'Renamed',
+        userId: secondUserId,
+      };
+      const updated = await shoppingService.update(
+        testUserId,
+        created.id,
+        malicious as Partial<IShoppingList>
+      );
+
+      // Ownership is unchanged; only the allow-listed `name` was applied.
+      expect(updated.userId).toBe(testUserId);
+      expect(updated.name).toBe('Renamed');
+
+      // The impersonated user still cannot see the list.
+      const victimLists = await shoppingService.getLists(secondUserId);
+      expect(victimLists).toHaveLength(0);
     });
   });
 });

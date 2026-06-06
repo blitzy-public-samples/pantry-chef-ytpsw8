@@ -99,20 +99,24 @@ PantrySchema.methods.getStats = async function(): Promise<PantryStats> {
       expiringItems++;
     }
 
-    // Track low stock items (threshold varies by category)
-    if (item.quantity <= this.getLowStockThreshold(item)) {
-      lowStockItems++;
-    }
-
     // Group by location
     const locationCount = itemsByLocation.get(item.location) || 0;
     itemsByLocation.set(item.location, locationCount + 1);
 
-    // Group by category (requires ingredient lookup)
+    // Resolve the ingredient once for both category grouping and the
+    // category-specific low-stock threshold (avoids a second async lookup).
     const ingredient = await mongoose.model('Ingredient').findById(item.ingredientId);
     if (ingredient) {
       const categoryCount = itemsByCategory.get(ingredient.category) || 0;
       itemsByCategory.set(ingredient.category, categoryCount + 1);
+
+      // Track low stock items (threshold varies by category)
+      if (item.quantity <= this.getLowStockThreshold(ingredient.category)) {
+        lowStockItems++;
+      }
+    } else if (item.quantity <= 1) {
+      // Fallback to the default threshold when the ingredient cannot be resolved
+      lowStockItems++;
     }
   }
 
@@ -178,10 +182,13 @@ PantrySchema.methods.updateItemQuantity = async function(
   }
 };
 
-// Helper method to determine low stock threshold based on ingredient category
-private getLowStockThreshold(item: PantryItem): number {
+// Helper method to determine low stock threshold based on ingredient category.
+// Implemented as a synchronous schema method because it is consumed inside the
+// synchronous portion of getStats(); the caller resolves the ingredient and
+// passes its category so no asynchronous lookup is required here.
+PantrySchema.methods.getLowStockThreshold = function(category: IngredientCategory): number {
   const defaultThreshold = 1;
-  const thresholds = {
+  const thresholds: Partial<Record<IngredientCategory, number>> = {
     [IngredientCategory.PRODUCE]: 2,
     [IngredientCategory.MEAT]: 1,
     [IngredientCategory.DAIRY]: 1,
@@ -192,13 +199,26 @@ private getLowStockThreshold(item: PantryItem): number {
     [IngredientCategory.OTHER]: 1
   };
 
-  const ingredient = await mongoose.model('Ingredient').findById(item.ingredientId);
-  return ingredient ? thresholds[ingredient.category] : defaultThreshold;
-}
+  return thresholds[category] ?? defaultThreshold;
+};
 
 // Create indexes for efficient querying
 PantrySchema.index({ userId: 1 });
 PantrySchema.index({ 'items.ingredientId': 1 });
 PantrySchema.index({ 'items.expirationDate': 1 });
 
-export const PantryModel = mongoose.model<Pantry & Document>('Pantry', PantrySchema);
+/**
+ * Mongoose document type for a pantry. Extends the plain {@link Pantry} data
+ * shape with the instance methods registered on PantrySchema.methods so that
+ * consumers (e.g. PantryService) can invoke them on hydrated documents in a
+ * fully type-safe manner instead of treating them as (non-existent) statics.
+ */
+export type PantryDocument = Pantry & Document & {
+  getStats(): Promise<PantryStats>;
+  addItem(item: PantryItem): Promise<void>;
+  removeItem(ingredientId: string): Promise<void>;
+  updateItemQuantity(ingredientId: string, quantity: number): Promise<void>;
+  getLowStockThreshold(category: IngredientCategory): number;
+};
+
+export const PantryModel = mongoose.model<PantryDocument>('Pantry', PantrySchema);

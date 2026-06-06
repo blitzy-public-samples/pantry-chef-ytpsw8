@@ -4,7 +4,8 @@
 //
 // HUMAN TASKS:
 // 1. Confirm shopping-list sync intervals and conflict-resolution policy with the product team
-// 2. Verify the server response shape for the toggle route (single item vs. full list) against the backend controller
+// 2. Toggle route returns the FULL updated list (decided): `toggleItem` returns `ShoppingList`,
+//    matching the backend controller and the web client; re-confirm parity in staging.
 // 3. Set up analytics tracking for shopping-list synchronization operations
 // 4. Validate cross-device merge semantics once the backend route is live in staging
 
@@ -35,12 +36,21 @@ public enum ShoppingListServiceError: Error {
 // strategy for routes 1-5. The PATCH toggle route (route 6) is transported by a
 // self-contained helper because `NetworkService` does not expose a PATCH verb.
 //
-// Access-control note: the service exposes six instance methods as `internal`
-// (the default) rather than `public`. The domain model types they reference
-// (`ShoppingList`, `ShoppingListItem`, `ShoppingListGenerationOptions`) are
-// declared `internal`, and Swift forbids a `public` method from exposing an
-// `internal` type in its signature. All callers live in the same app module, so
-// `internal` visibility is sufficient and matches the peer `RecipeService`.
+// Access-control note: the service exposes exactly six `public` instance methods
+// (getLists, createList, updateList, deleteList, generateList, toggleItem). The
+// domain model types they reference (`ShoppingList`, `ShoppingListItem`,
+// `ShoppingListGenerationOptions`) are therefore declared `public` as well, since
+// Swift forbids a `public` method from exposing an `internal` type in its
+// signature.
+//
+// Response-envelope note: every backend route replies with the unified envelope
+// `{ success, data, metadata }`. All six methods decode the private
+// `ApiEnvelope<T>` wrapper and surface only the unwrapped `.data` payload, so the
+// service's public surface speaks in domain types (`[ShoppingList]`,
+// `ShoppingList`, `Void`) rather than transport envelopes. Mutating writes
+// (createList/updateList) send an allow-listed write DTO (`name` + client-editable
+// item fields only) so server-managed fields (`userId`, `id`, timestamps, the
+// iOS-only completion state) can never drift to the server.
 public final class ShoppingListService {
 
     // MARK: - Singleton
@@ -51,69 +61,171 @@ public final class ShoppingListService {
         Logger.shared.debug("ShoppingListService initialized")
     }
 
+    // MARK: - Response Envelope & Write DTOs
+
+    /// Generic wrapper for the backend's unified success envelope
+    /// `{ success, data, metadata }`. Only `data` is consumed by callers; the
+    /// `metadata` block is intentionally not modeled because `JSONDecoder` ignores
+    /// JSON keys absent from a type's `CodingKeys`, so omitting it is safe and
+    /// keeps the wrapper minimal. Every request decodes `ApiEnvelope<T>` and maps
+    /// to its `.data`, so no raw domain value is ever decoded at the top level.
+    private struct ApiEnvelope<T: Decodable>: Decodable {
+        let success: Bool
+        let data: T
+    }
+
+    /// Payload of the backend delete route, whose `data` is `{ message }` rather
+    /// than the deleted resource. Decoded to confirm the envelope shape, then
+    /// discarded so `deleteList` can surface `Void` to callers.
+    private struct DeleteResponse: Decodable {
+        let message: String
+    }
+
+    /// Allow-listed request body for create/update writes. Carries ONLY the two
+    /// client-editable list fields (`name`, `items`); it deliberately omits
+    /// `id`/`userId`, `createdAt`/`updatedAt`, and the iOS-only `isCompleted`/
+    /// `completedAt` fields so a whole-`ShoppingList` encode can never push
+    /// server-managed or iOS-only state to the backend. Mirrors the backend's
+    /// `buildListDto` allow-list and the web client's create/update payloads.
+    private struct ShoppingListWriteDTO: Encodable {
+        let name: String
+        let items: [ShoppingListItemWriteDTO]
+    }
+
+    /// Allow-listed per-item write payload. Property names are the canonical
+    /// server/web keys verbatim, and the `checked` field carries the iOS item's
+    /// `isPurchased` value (the `isPurchased`⇄`checked` mapping). The per-item
+    /// `id` is intentionally absent: the server assigns item identifiers, so a
+    /// client can never inject a chosen subdocument id. Optional fields encode via
+    /// Swift's synthesized `encodeIfPresent`, so `nil` values are omitted rather
+    /// than sent as JSON `null`.
+    private struct ShoppingListItemWriteDTO: Encodable {
+        let name: String
+        let quantity: Double
+        let unit: String
+        let category: String
+        let checked: Bool
+        let notes: String?
+        let recipeId: String?
+        let recipeName: String?
+    }
+
+    /// Maps a domain `ShoppingList` to its allow-listed write DTO, applying the
+    /// `isPurchased`⇄`checked` mapping for each item. Shared by `createList` and
+    /// `updateList` so both write paths use one authoritative allow-list.
+    private static func makeWriteDTO(from list: ShoppingList) -> ShoppingListWriteDTO {
+        ShoppingListWriteDTO(
+            name: list.name,
+            items: list.items.map { item in
+                ShoppingListItemWriteDTO(
+                    name: item.name,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    category: item.category,
+                    checked: item.isPurchased,
+                    notes: item.notes,
+                    recipeId: item.recipeId,
+                    recipeName: item.recipeName
+                )
+            }
+        )
+    }
+
     // MARK: - CRUD & Generation (Routes 1-5 via NetworkService)
 
     /// Fetches every shopping list owned by the authenticated user.
-    /// Route 1 — `GET /shopping-lists` → `[ShoppingList]`.
+    /// Route 1 — `GET /shopping-lists` → unified envelope wrapping `[ShoppingList]`.
     ///
     /// `NetworkService` injects the `Authorization: Bearer <token>` header and
-    /// applies the shared decoder strategy automatically.
+    /// applies the shared decoder strategy automatically; the envelope is unwrapped
+    /// to its `.data` so callers receive the user's lists directly.
     /// - Returns: Publisher emitting the user's shopping lists or a typed error.
-    func getLists() -> AnyPublisher<[ShoppingList], ShoppingListServiceError> {
-        return NetworkService.shared.request("/shopping-lists", method: .get)
+    public func getLists() -> AnyPublisher<[ShoppingList], ShoppingListServiceError> {
+        let publisher: AnyPublisher<ApiEnvelope<[ShoppingList]>, NetworkError> =
+            NetworkService.shared.request("/shopping-lists", method: .get)
+        return publisher
+            .map { $0.data }
             .mapError { _ in ShoppingListServiceError.networkError }
             .eraseToAnyPublisher()
     }
 
     /// Creates a new shopping list on the server.
-    /// Route 2 — `POST /shopping-lists` with the list as the request body → `ShoppingList`.
+    /// Route 2 — `POST /shopping-lists` with an allow-listed write DTO as the
+    /// request body → unified envelope wrapping the created `ShoppingList`.
     ///
-    /// The `ShoppingList`/`ShoppingListItem` `Codable` conformance applies the
-    /// `checked`⇄`isPurchased` mapping automatically during encoding, so the
-    /// payload matches the cross-platform contract without any hand-rolled JSON.
-    /// - Parameter list: The shopping list to persist.
+    /// The body is an allow-listed `ShoppingListWriteDTO` (built by
+    /// `makeWriteDTO(from:)`), NOT the whole `ShoppingList`: it sends only `name`
+    /// and client-editable item fields, applying the `isPurchased`⇄`checked`
+    /// mapping, so server-managed fields can never drift to the server. The
+    /// response envelope is unwrapped to its `.data`.
+    /// - Parameter list: The shopping list whose editable fields are persisted.
     /// - Returns: Publisher emitting the server-persisted list or a typed error.
-    func createList(_ list: ShoppingList) -> AnyPublisher<ShoppingList, ShoppingListServiceError> {
-        return NetworkService.shared.request("/shopping-lists", method: .post, body: list)
+    public func createList(_ list: ShoppingList) -> AnyPublisher<ShoppingList, ShoppingListServiceError> {
+        let publisher: AnyPublisher<ApiEnvelope<ShoppingList>, NetworkError> =
+            NetworkService.shared.request("/shopping-lists", method: .post, body: Self.makeWriteDTO(from: list))
+        return publisher
+            .map { $0.data }
             .mapError { _ in ShoppingListServiceError.networkError }
             .eraseToAnyPublisher()
     }
 
     /// Updates an existing shopping list on the server.
-    /// Route 3 — `PUT /shopping-lists/{id}` with the list as the request body → `ShoppingList`.
+    /// Route 3 — `PUT /shopping-lists/{id}` with an allow-listed write DTO as the
+    /// request body → unified envelope wrapping the updated `ShoppingList`.
+    ///
+    /// The list's `id` selects the resource via the path and is never sent in the
+    /// body. As with create, only `name` and client-editable item fields are sent
+    /// (via `makeWriteDTO(from:)`), and the response envelope is unwrapped to `.data`.
     /// - Parameter list: The shopping list to update; its `id` selects the resource.
     /// - Returns: Publisher emitting the updated list or a typed error.
-    func updateList(_ list: ShoppingList) -> AnyPublisher<ShoppingList, ShoppingListServiceError> {
-        return NetworkService.shared.request("/shopping-lists/\(list.id)", method: .put, body: list)
+    public func updateList(_ list: ShoppingList) -> AnyPublisher<ShoppingList, ShoppingListServiceError> {
+        let publisher: AnyPublisher<ApiEnvelope<ShoppingList>, NetworkError> =
+            NetworkService.shared.request("/shopping-lists/\(list.id)", method: .put, body: Self.makeWriteDTO(from: list))
+        return publisher
+            .map { $0.data }
             .mapError { _ in ShoppingListServiceError.networkError }
             .eraseToAnyPublisher()
     }
 
     /// Deletes a shopping list on the server.
-    /// Route 4 — `DELETE /shopping-lists/{id}` → `Bool`.
+    /// Route 4 — `DELETE /shopping-lists/{id}` → unified envelope whose `data` is a
+    /// confirmation `{ message }` (NOT the deleted resource and NOT a boolean).
     ///
-    /// The generic `T` of `NetworkService.request` is inferred as `Bool` from this
-    /// method's return type, mirroring `PantryService.removeItem`.
+    /// The envelope is decoded as `ApiEnvelope<DeleteResponse>` to confirm the
+    /// contract shape, then mapped to `Void`: deletion either succeeds (a 2xx,
+    /// which `NetworkService` requires before decoding) or surfaces a typed error,
+    /// so a success/failure boolean would be redundant. This matches the backend's
+    /// message/void delete contract.
     /// - Parameter id: Identifier of the shopping list to delete.
-    /// - Returns: Publisher emitting the deletion success flag or a typed error.
-    func deleteList(id: String) -> AnyPublisher<Bool, ShoppingListServiceError> {
-        return NetworkService.shared.request("/shopping-lists/\(id)", method: .delete)
+    /// - Returns: Publisher completing on success or emitting a typed error.
+    public func deleteList(id: String) -> AnyPublisher<Void, ShoppingListServiceError> {
+        let publisher: AnyPublisher<ApiEnvelope<DeleteResponse>, NetworkError> =
+            NetworkService.shared.request("/shopping-lists/\(id)", method: .delete)
+        return publisher
+            .map { _ in () }
             .mapError { _ in ShoppingListServiceError.networkError }
             .eraseToAnyPublisher()
     }
 
     /// Generates a shopping list from recipes, optionally excluding on-hand pantry inventory.
     /// Route 5 — `POST /shopping-lists/{id}/generate` with `ShoppingListGenerationOptions`
-    /// as the request body → `ShoppingList`.
+    /// as the request body → unified envelope wrapping the generated `ShoppingList`.
+    ///
+    /// `ShoppingListGenerationOptions` is the legitimate client-supplied generation
+    /// input (recipe ids, servings, inventory exclusion, dedup), so it is sent
+    /// as-is; the response envelope is unwrapped to its `.data`.
     /// - Parameters:
     ///   - id: Identifier of the shopping list to (re)generate.
     ///   - options: Generation options (recipe ids, servings, inventory exclusion, dedup).
     /// - Returns: Publisher emitting the generated list or a typed error.
-    func generateList(
+    public func generateList(
         id: String,
         options: ShoppingListGenerationOptions
     ) -> AnyPublisher<ShoppingList, ShoppingListServiceError> {
-        return NetworkService.shared.request("/shopping-lists/\(id)/generate", method: .post, body: options)
+        let publisher: AnyPublisher<ApiEnvelope<ShoppingList>, NetworkError> =
+            NetworkService.shared.request("/shopping-lists/\(id)/generate", method: .post, body: options)
+        return publisher
+            .map { $0.data }
             .mapError { _ in ShoppingListServiceError.networkError }
             .eraseToAnyPublisher()
     }
@@ -193,18 +305,25 @@ public final class ShoppingListService {
     // MARK: - Toggle Item (Route 6 via self-contained PATCH)
 
     /// Toggles the `checked`/`isPurchased` state of a single shopping-list item.
-    /// Route 6 — `PATCH /shopping-lists/{listId}/items/{itemId}/toggle` → `ShoppingListItem`.
+    /// Route 6 — `PATCH /shopping-lists/{listId}/items/{itemId}/toggle` → unified
+    /// envelope wrapping the FULL updated `ShoppingList`.
     ///
     /// Implemented through the self-contained `patch(_:body:)` helper above because
-    /// `NetworkService` has no PATCH support. Returns the toggled item, aligning
-    /// with the web client (`updateShoppingListItem` returns the item); the model's
+    /// `NetworkService` has no PATCH support. The backend toggle route returns the
+    /// entire updated list (not the single item), so this method returns
+    /// `ShoppingList`; the web client (`updateShoppingListItem`) is aligned to the
+    /// same full-list contract for cross-platform consistency (R8). The list's
     /// `Codable` conformance applies the `checked`⇄`isPurchased` mapping on decode.
     /// The toggle carries no request body.
     /// - Parameters:
     ///   - listId: Identifier of the owning shopping list.
     ///   - itemId: Identifier of the item to toggle.
-    /// - Returns: Publisher emitting the updated `ShoppingListItem` or a typed error.
-    func toggleItem(listId: String, itemId: String) -> AnyPublisher<ShoppingListItem, ShoppingListServiceError> {
-        return patch("/shopping-lists/\(listId)/items/\(itemId)/toggle")
+    /// - Returns: Publisher emitting the updated `ShoppingList` or a typed error.
+    public func toggleItem(listId: String, itemId: String) -> AnyPublisher<ShoppingList, ShoppingListServiceError> {
+        let publisher: AnyPublisher<ApiEnvelope<ShoppingList>, ShoppingListServiceError> =
+            patch("/shopping-lists/\(listId)/items/\(itemId)/toggle")
+        return publisher
+            .map { $0.data }
+            .eraseToAnyPublisher()
     }
 }

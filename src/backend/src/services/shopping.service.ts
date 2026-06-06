@@ -24,6 +24,19 @@ import { AppError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 /**
+ * Default number of shopping lists returned per page when a caller does not
+ * specify a limit. Keeps cold-cache `getLists` reads bounded (R10 performance
+ * budget) instead of loading a user's entire collection in one unbounded query.
+ */
+const DEFAULT_PAGE_SIZE = 50;
+
+/**
+ * Hard upper bound on the page size a caller may request, so a client cannot
+ * defeat the pagination cap by passing an arbitrarily large `limit`.
+ */
+const MAX_PAGE_SIZE = 100;
+
+/**
  * Service layer for the server-authoritative shopping-list domain (Feature 1 —
  * Shopping List Backend Route and Cross-Device Sync).
  *
@@ -53,32 +66,57 @@ export class ShoppingService {
   constructor(private cacheService: CacheService, private pantryService: PantryService) {}
 
   /**
-   * Retrieves all shopping lists owned by a user, cache-first.
+   * Retrieves a bounded page of shopping lists owned by a user, cache-first.
    *
-   * On a cache hit the cached collection is returned directly; on a miss the lists
-   * are loaded from the database, written back to the cache (default 1-hour TTL),
-   * and returned.
+   * The query is paginated and sorted most-recently-updated-first to honor the
+   * platform performance budget (R10): an unbounded `find({ userId })` could grow
+   * without limit on a cold cache, so the result set is capped at `limit`
+   * (defaulting to {@link DEFAULT_PAGE_SIZE}, hard-capped at {@link MAX_PAGE_SIZE})
+   * and offset by `page`. The cache key embeds the pagination window
+   * (`shopping:<userId>:<page>:<limit>`) so each window is cached independently;
+   * on a hit the cached page is returned directly, on a miss the page is loaded,
+   * written back to the cache (default 1-hour TTL), and returned.
    *
-   * Addresses requirement: Shopping List Management - User-scoped list retrieval
-   * with caching for fast repeated reads.
+   * Addresses requirement: Shopping List Management - User-scoped, paginated list
+   * retrieval with caching for fast repeated reads.
    */
-  public async getLists(userId: string): Promise<IShoppingList[]> {
-    const key = `${this.CACHE_PREFIX}${userId}`;
+  public async getLists(
+    userId: string,
+    page = 1,
+    limit = DEFAULT_PAGE_SIZE
+  ): Promise<IShoppingList[]> {
+    // Clamp pagination inputs to safe bounds: page >= 1, 1 <= limit <= MAX_PAGE_SIZE.
+    const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
+    const safeLimit =
+      Number.isFinite(limit) && limit >= 1
+        ? Math.min(Math.floor(limit), MAX_PAGE_SIZE)
+        : DEFAULT_PAGE_SIZE;
+    const skip = (safePage - 1) * safeLimit;
+
+    // Cache key embeds the pagination window so distinct pages never collide.
+    const key = `${this.CACHE_PREFIX}${userId}:${safePage}:${safeLimit}`;
     try {
-      // Check cache first for the user's list collection.
+      // Check cache first for this pagination window of the user's collection.
       const cached = await this.cacheService.get<IShoppingList[]>(key);
       if (cached) {
         return cached;
       }
 
-      // Cache miss: load all lists scoped to this user from the database.
-      const lists = await ShoppingModel.find({ userId });
+      // Cache miss: load a bounded, most-recently-updated-first page scoped to
+      // this user. The filter always includes `userId` for ownership isolation.
+      const lists = await ShoppingModel.find({ userId }, null, {
+        sort: { updatedAt: -1 },
+        skip,
+        limit: safeLimit,
+      });
 
       // Populate the cache (no TTL argument -> CacheService default of 3600s).
       await this.cacheService.set(key, lists);
 
       logger.info('Shopping lists retrieved successfully', {
         userId,
+        page: safePage,
+        limit: safeLimit,
         count: lists.length,
         timestamp: new Date().toISOString(),
       });
@@ -123,20 +161,26 @@ export class ShoppingService {
   }
 
   /**
-   * Creates a new shopping list for a user.
+   * Creates a new shopping list for a user from client-supplied data.
    *
-   * The new document is always scoped to the authenticated user, and the per-user
-   * list cache is invalidated so a subsequent `getLists` reflects the new list.
+   * The payload is first reduced to an allow-list of client-editable fields
+   * (`name` and `items`, each item itself allow-listed) via {@link sanitizeListData},
+   * and the authenticated `userId` is applied LAST so a client-supplied `userId`
+   * (or `_id`/timestamps/Mongo operators) can never override ownership — closing
+   * the create-time ownership-drift vector (R3 user scoping). The per-user list
+   * cache is invalidated so a subsequent `getLists` reflects the new list.
    *
    * Addresses requirement: Shopping List Management - User-scoped list creation.
    */
   public async create(userId: string, data: Partial<IShoppingList>): Promise<IShoppingList> {
-    const key = `${this.CACHE_PREFIX}${userId}`;
     try {
-      const list = await ShoppingModel.create({ userId, ...data });
+      // Allow-list client-editable fields, then set userId LAST so neither the
+      // spread nor any client-supplied `userId` can overwrite the authenticated owner.
+      const sanitized = this.sanitizeListData(data);
+      const list = await ShoppingModel.create({ ...sanitized, userId });
 
-      // Invalidate the per-user list cache after the mutation.
-      await this.cacheService.delete(key);
+      // Invalidate every cached page of the user's collection after the mutation.
+      await this.invalidateUserCache(userId);
 
       logger.info('Shopping list created successfully', {
         userId,
@@ -159,8 +203,12 @@ export class ShoppingService {
    * Updates an existing shopping list owned by a user.
    *
    * The `{ _id, userId }` filter enforces ownership isolation; a missing or
-   * non-owned list yields not-found (404). The per-user cache is invalidated on
-   * success.
+   * non-owned list yields not-found (404). The client payload is reduced to an
+   * allow-listed `$set` of editable fields (`name`/`items`) via
+   * {@link sanitizeListData} so `userId`, `_id`, timestamps, and raw Mongo
+   * operators cannot be smuggled through `findOneAndUpdate`; `runValidators` is
+   * enabled so schema constraints (e.g. item `quantity >= 0`) are enforced on
+   * update as they are on create. The per-user cache is invalidated on success.
    *
    * Addresses requirement: Shopping List Management - Ownership-scoped list update.
    */
@@ -169,15 +217,22 @@ export class ShoppingService {
     id: string,
     data: Partial<IShoppingList>
   ): Promise<IShoppingList> {
-    const key = `${this.CACHE_PREFIX}${userId}`;
     try {
-      const list = await ShoppingModel.findOneAndUpdate({ _id: id, userId }, data, { new: true });
+      // Reduce the payload to an allow-listed $set so a caller cannot reassign
+      // ownership or inject server-managed fields/operators; enforce schema
+      // validators on the update path.
+      const sanitized = this.sanitizeListData(data);
+      const list = await ShoppingModel.findOneAndUpdate(
+        { _id: id, userId },
+        { $set: sanitized },
+        { new: true, runValidators: true }
+      );
       if (!list) {
         throw new AppError('Shopping list not found', 404, 'SHOPPING_LIST_NOT_FOUND');
       }
 
-      // Invalidate the per-user list cache after the mutation.
-      await this.cacheService.delete(key);
+      // Invalidate every cached page of the user's collection after the mutation.
+      await this.invalidateUserCache(userId);
 
       logger.info('Shopping list updated successfully', {
         userId,
@@ -207,15 +262,14 @@ export class ShoppingService {
    * Addresses requirement: Shopping List Management - Ownership-scoped list deletion.
    */
   public async delete(userId: string, id: string): Promise<void> {
-    const key = `${this.CACHE_PREFIX}${userId}`;
     try {
       const list = await ShoppingModel.findOneAndDelete({ _id: id, userId });
       if (!list) {
         throw new AppError('Shopping list not found', 404, 'SHOPPING_LIST_NOT_FOUND');
       }
 
-      // Invalidate the per-user list cache after the mutation.
-      await this.cacheService.delete(key);
+      // Invalidate every cached page of the user's collection after the mutation.
+      await this.invalidateUserCache(userId);
 
       logger.info('Shopping list deleted successfully', {
         userId,
@@ -252,7 +306,6 @@ export class ShoppingService {
     userId: string,
     options: IShoppingListGenerationOptions
   ): Promise<IShoppingList> {
-    const key = `${this.CACHE_PREFIX}${userId}`;
     try {
       // Derive candidate items from the generation options alone. There is no
       // recipe service or recipe model available here, so each requested recipe id
@@ -322,8 +375,9 @@ export class ShoppingService {
         generationOptions: options,
       });
 
-      // Invalidate the per-user list cache so subsequent getLists is consistent.
-      await this.cacheService.delete(key);
+      // Invalidate every cached page of the user's collection so subsequent
+      // getLists reads are consistent.
+      await this.invalidateUserCache(userId);
 
       logger.info('Shopping list generated successfully', {
         userId,
@@ -356,7 +410,6 @@ export class ShoppingService {
    * with cross-device synchronization.
    */
   public async toggleItem(userId: string, listId: string, itemId: string): Promise<IShoppingList> {
-    const key = `${this.CACHE_PREFIX}${userId}`;
     try {
       const list = await ShoppingModel.findOne({ _id: listId, userId });
       if (!list) {
@@ -373,8 +426,8 @@ export class ShoppingService {
       item.checked = !item.checked;
       await list.save();
 
-      // Invalidate the per-user list cache after the mutation.
-      await this.cacheService.delete(key);
+      // Invalidate every cached page of the user's collection after the mutation.
+      await this.invalidateUserCache(userId);
 
       logger.info('Shopping list item toggled successfully', {
         userId,
@@ -468,5 +521,69 @@ export class ShoppingService {
     }
 
     return result;
+  }
+
+  /**
+   * Invalidates every cached page of a user's shopping-list collection.
+   *
+   * List reads are cached per pagination window under keys shaped
+   * `shopping:<userId>:<page>:<limit>`, so a single-key delete would leave stale
+   * pages behind. Clearing by the `shopping:<userId>:*` glob removes all cached
+   * windows for the user after any mutation. The trailing `:` anchors the glob so
+   * one user's keys never match another's (e.g. `shopping:u1:*` excludes
+   * `shopping:u12:*`).
+   */
+  private async invalidateUserCache(userId: string): Promise<void> {
+    await this.cacheService.clear(`${this.CACHE_PREFIX}${userId}:*`);
+  }
+
+  /**
+   * Reduces client-supplied list data to an allow-list of editable fields.
+   *
+   * Only `name` and `items` survive; every server-managed or unknown field —
+   * `userId`, `_id`/`id`, `createdAt`/`updatedAt`, `generationOptions`, and any
+   * raw Mongo update operators (e.g. `$set`, `$inc`) a caller might smuggle into
+   * the request body — is dropped because it is simply not copied. This is the
+   * authoritative defense that prevents create/update ownership drift even if a
+   * caller bypasses the controller DTO and passes a raw request body (R3 user
+   * scoping; security/ownership-isolation findings).
+   */
+  private sanitizeListData(data: Partial<IShoppingList>): Partial<IShoppingList> {
+    const clean: Partial<IShoppingList> = {};
+    if (typeof data.name === 'string') {
+      clean.name = data.name;
+    }
+    if (Array.isArray(data.items)) {
+      clean.items = this.sanitizeItems(data.items);
+    }
+    return clean;
+  }
+
+  /**
+   * Allow-lists each shopping-list item to the client-editable item fields.
+   *
+   * A fresh server-side placeholder `id` is assigned per item so a client can
+   * never inject a chosen subdocument identifier (Mongoose assigns the
+   * authoritative `_id` on persistence regardless). The eight content fields are
+   * copied through verbatim — invalid values (e.g. a negative `quantity`, or a
+   * missing required field) are intentionally NOT coerced here so the schema
+   * validators (`runValidators` on update, and `create`'s implicit validation)
+   * reject them, surfacing a validation error rather than silently persisting
+   * bad data.
+   */
+  private sanitizeItems(items: IShoppingListItem[]): IShoppingListItem[] {
+    return items.map(
+      (item, index): IShoppingListItem => ({
+        id: this.buildGeneratedItemId(index),
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        category: item.category,
+        checked: item.checked,
+        notes: item.notes,
+        recipeId: item.recipeId,
+        recipeName: item.recipeName,
+      })
+    );
   }
 }

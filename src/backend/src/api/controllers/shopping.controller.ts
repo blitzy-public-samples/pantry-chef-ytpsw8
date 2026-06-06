@@ -22,12 +22,10 @@ import { injectable } from 'tsyringe';
 import { ShoppingService } from '../../services/shopping.service';
 import { logger } from '../../utils/logger';
 import {
-  createShoppingListValidation,
-  updateShoppingListValidation,
-  generateShoppingListValidation,
-  toggleItemValidation,
-} from '../validators/shopping.validator';
-import { IShoppingList, IShoppingListGenerationOptions } from '../../interfaces/shopping.interface';
+  IShoppingList,
+  IShoppingListItem,
+  IShoppingListGenerationOptions,
+} from '../../interfaces/shopping.interface';
 
 /**
  * Controller exposing the server-authoritative shopping-list HTTP endpoints
@@ -59,29 +57,16 @@ import { IShoppingList, IShoppingListGenerationOptions } from '../../interfaces/
  */
 @injectable()
 export class ShoppingController {
-  /**
-   * Express-validator chains that guard each mutating shopping-list route. The chains are
-   * enforced at the route layer (`shopping.routes.ts` wires them into the middleware
-   * pipeline ahead of the handler); they are co-located here to document, in one place, the
-   * validation contract each mutating handler depends on when it reads the outcome via
-   * `validationResult(req)`. This mirrors the validator-import convention of the peer
-   * controllers (pantry/recipe) and keeps the module shape consistent across domains.
-   */
-  private readonly validations = {
-    create: createShoppingListValidation,
-    update: updateShoppingListValidation,
-    generate: generateShoppingListValidation,
-    toggleItem: toggleItemValidation,
-  };
-
   constructor(private shoppingService: ShoppingService) {}
 
   /**
    * GET /shopping-lists - retrieves every shopping list owned by the authenticated user.
    *
    * Non-mutating: no `validationResult` guard is applied (no request body to validate).
-   * Delegates to `ShoppingService.getLists(userId)` (cache-first) and returns the collection
-   * in the unified success envelope with HTTP 200.
+   * Optional `page`/`limit` query parameters select a bounded pagination window; they are
+   * forwarded to `ShoppingService.getLists` (cache-first), which clamps them to safe bounds
+   * and defaults them when absent. Returns the collection page in the unified success
+   * envelope with HTTP 200.
    *
    * Addresses requirement: Shopping List Management - User-scoped list retrieval.
    */
@@ -90,7 +75,14 @@ export class ShoppingController {
     try {
       const userId = req.user?.id as string;
 
-      const lists = await this.shoppingService.getLists(userId);
+      // Optional pagination query params. When absent (or non-numeric) the service applies
+      // its safe defaults; the service also clamps page/limit to bounded ranges.
+      const pageRaw = req.query.page;
+      const limitRaw = req.query.limit;
+      const page = typeof pageRaw === 'string' ? Number(pageRaw) : undefined;
+      const limit = typeof limitRaw === 'string' ? Number(limitRaw) : undefined;
+
+      const lists = await this.shoppingService.getLists(userId, page, limit);
 
       const responseTime = Date.now() - startTime;
       logger.info('Shopping lists retrieved', {
@@ -137,7 +129,10 @@ export class ShoppingController {
         return;
       }
 
-      const data = req.body as Partial<IShoppingList>;
+      // Build an explicit allow-listed DTO from the request body rather than forwarding the
+      // raw body: express-validator does not strip unknown fields, so a raw body could carry
+      // server-managed fields (userId/_id/timestamps) or Mongo operators to the service.
+      const data = this.buildListDto(req);
       const list = await this.shoppingService.create(userId, data);
 
       const responseTime = Date.now() - startTime;
@@ -186,7 +181,8 @@ export class ShoppingController {
         return;
       }
 
-      const data = req.body as Partial<IShoppingList>;
+      // Allow-listed DTO (see create): never forward the raw body to the service.
+      const data = this.buildListDto(req);
       const list = await this.shoppingService.update(userId, req.params.id, data);
 
       const responseTime = Date.now() - startTime;
@@ -210,10 +206,12 @@ export class ShoppingController {
   /**
    * DELETE /:id - deletes a shopping list owned by the authenticated user.
    *
-   * Non-mutating body (path param only): no `validationResult` guard is applied. Delegates to
-   * `ShoppingService.delete(userId, id)`, which returns `void` and enforces ownership
-   * isolation and not-found (404). Because there is no resource to echo back, the success
-   * envelope carries a confirmation message payload with HTTP 200.
+   * Runs the `validationResult` guard first (the route attaches `deleteShoppingListValidation`,
+   * which checks `:id` is a well-formed ObjectId) and returns the unified 400 error body on
+   * failure, so an invalid id yields 400 rather than a Mongoose CastError/500. Delegates to
+   * `ShoppingService.delete(userId, id)`, which returns `void` and enforces ownership isolation
+   * and not-found (404). Because there is no resource to echo back, the success envelope carries
+   * a confirmation message payload with HTTP 200.
    *
    * Addresses requirement: Shopping List Management - Ownership-scoped list deletion.
    */
@@ -221,6 +219,19 @@ export class ShoppingController {
     const startTime = Date.now();
     try {
       const userId = req.user?.id as string;
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Validation failed',
+            details: errors.array(),
+          },
+        });
+        return;
+      }
 
       await this.shoppingService.delete(userId, req.params.id);
 
@@ -345,5 +356,52 @@ export class ShoppingController {
     } catch (error) {
       next(error);
     }
+  }
+
+  /**
+   * Builds an explicit, allow-listed shopping-list DTO from the raw request body.
+   *
+   * express-validator validates known fields but does NOT strip unknown ones, so a raw
+   * `req.body` can still carry server-managed fields (`userId`, `_id`/`id`,
+   * `createdAt`/`updatedAt`), `generationOptions`, or smuggled Mongo update operators
+   * (`$set`, `$inc`, ...). This helper is the controller-boundary half of a defense-in-depth
+   * allow-list (the authoritative second half is `ShoppingService.sanitizeListData`): it
+   * copies through ONLY the two client-editable list fields - `name` and `items` - and, for
+   * each item, ONLY the eight client-editable content fields. The per-item `id` is left as an
+   * empty placeholder for the service to overwrite with a server-side identifier, so a client
+   * can never inject a chosen subdocument id.
+   *
+   * Item values are copied verbatim (not coerced): an invalid value such as a negative
+   * `quantity` is intentionally preserved so the schema validators reject it with a
+   * validation error rather than the controller silently dropping or "fixing" it.
+   *
+   * Addresses: Security / Ownership-isolation - prevents create/update ownership drift and
+   * server-managed field injection (R3 user scoping).
+   */
+  private buildListDto(req: Request): Partial<IShoppingList> {
+    const body = (req.body ?? {}) as Partial<IShoppingList>;
+    const dto: Partial<IShoppingList> = {};
+
+    if (typeof body.name === 'string') {
+      dto.name = body.name;
+    }
+
+    if (Array.isArray(body.items)) {
+      dto.items = body.items.map(
+        (item): IShoppingListItem => ({
+          id: '',
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+          category: item.category,
+          checked: item.checked,
+          notes: item.notes,
+          recipeId: item.recipeId,
+          recipeName: item.recipeName,
+        })
+      );
+    }
+
+    return dto;
   }
 }

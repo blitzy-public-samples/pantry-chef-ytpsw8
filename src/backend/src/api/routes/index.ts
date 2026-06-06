@@ -10,8 +10,9 @@ import compression from 'compression';
 import router from './analytics.routes';
 import { configureAuthRoutes } from './auth.routes';
 import { recipeRouter } from './recipe.routes';
-import router as pantryRouter from './pantry.routes';
+import pantryRouter from './pantry.routes';
 import userRouter from './user.routes';
+import shoppingRouter from './shopping.routes';
 import { errorHandler } from '../middlewares/error.middleware';
 
 /*
@@ -112,6 +113,12 @@ export const configureRoutes = (app: Application): void => {
 
     // Mount user routes with profile handling
     app.use(`${API_VERSION}/users`, userRouter);
+
+    // Mount shopping-list routes with server-authoritative, user-scoped CRUD + generation
+    // (Feature 1 - Shopping List Backend Route and Cross-Device Sync). Mounted at
+    // `/api/v1/shopping-lists`; the router applies `authenticate` and the six user-specified
+    // routes resolve `ShoppingController` via tsyringe.
+    app.use(`${API_VERSION}/shopping-lists`, shoppingRouter);
 
     // Health check endpoint
     app.get('/health', (req, res) => {

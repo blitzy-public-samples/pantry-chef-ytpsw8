@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import compression from 'compression';
 import helmet from 'helmet';
 import http from 'http';
+import mongoose from 'mongoose';
 import { connectDatabase } from './config/database';
 import { createRedisClient } from './config/redis';
 import { configureRoutes } from './api/routes';

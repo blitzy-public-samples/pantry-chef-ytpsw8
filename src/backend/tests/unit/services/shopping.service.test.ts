@@ -140,9 +140,9 @@ describe('ShoppingService', () => {
             // Act
             const result = await shoppingService.getLists(mockUserId);
 
-            // Assert
+            // Assert — default pagination window (page 1, limit 50) is embedded in the cache key.
             expect(result).toEqual(mockLists);
-            expect(cacheService.get).toHaveBeenCalledWith(`shopping:${mockUserId}`);
+            expect(cacheService.get).toHaveBeenCalledWith(`shopping:${mockUserId}:1:50`);
             expect(ShoppingModel.find).not.toHaveBeenCalled();
         });
 
@@ -156,10 +156,17 @@ describe('ShoppingService', () => {
             // Act
             const result = await shoppingService.getLists(mockUserId);
 
-            // Assert — user-scoped query and the cached value are correct.
+            // Assert — user-scoped, bounded, most-recently-updated-first query and the cached value.
+            // The cold-cache read is paginated (R10 performance budget): the find carries the
+            // sort/skip/limit options and the default page-1/limit-50 window, and the cache key
+            // embeds that window.
             expect(result).toEqual(mockLists);
-            expect(ShoppingModel.find).toHaveBeenCalledWith({ userId: mockUserId });
-            expect(cacheService.set).toHaveBeenCalledWith(`shopping:${mockUserId}`, mockLists);
+            expect(ShoppingModel.find).toHaveBeenCalledWith(
+                { userId: mockUserId },
+                null,
+                { sort: { updatedAt: -1 }, skip: 0, limit: 50 }
+            );
+            expect(cacheService.set).toHaveBeenCalledWith(`shopping:${mockUserId}:1:50`, mockLists);
 
             // ★ DIVERGENCE FROM pantry.test.ts: the cache write passes NO third TTL argument —
             // the service relies on the CacheService default one-hour TTL. Assert the call carried
@@ -206,7 +213,7 @@ describe('ShoppingService', () => {
             // Arrange
             const createData: Partial<IShoppingList> = { name: 'Groceries', items: [mockItem] };
             (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
-            cacheService.delete.mockResolvedValue(undefined);
+            cacheService.clear.mockResolvedValue(undefined);
 
             // Act
             const result = await shoppingService.create(mockUserId, createData);
@@ -216,7 +223,8 @@ describe('ShoppingService', () => {
             expect(ShoppingModel.create).toHaveBeenCalledWith(
                 expect.objectContaining({ userId: mockUserId, name: 'Groceries' })
             );
-            expect(cacheService.delete).toHaveBeenCalledWith(`shopping:${mockUserId}`);
+            // Mutation invalidates EVERY cached pagination window for the user via the glob clear.
+            expect(cacheService.clear).toHaveBeenCalledWith(`shopping:${mockUserId}:*`);
         });
     });
 
@@ -226,19 +234,22 @@ describe('ShoppingService', () => {
             // Arrange
             const updateData: Partial<IShoppingList> = { name: 'Updated Shopping List' };
             (ShoppingModel.findOneAndUpdate as jest.Mock).mockResolvedValue(mockList);
-            cacheService.delete.mockResolvedValue(undefined);
+            cacheService.clear.mockResolvedValue(undefined);
 
             // Act
             const result = await shoppingService.update(mockUserId, mockListId, updateData);
 
-            // Assert — the filter enforces ownership and { new: true } returns the updated doc.
+            // Assert — the filter enforces ownership; the payload is applied as an allow-listed
+            // `$set` (so server-managed fields/operators cannot be smuggled in) and `runValidators`
+            // enforces schema constraints on update; `{ new: true }` returns the updated doc.
             expect(result).toEqual(mockList);
             expect(ShoppingModel.findOneAndUpdate).toHaveBeenCalledWith(
                 { _id: mockListId, userId: mockUserId },
-                updateData,
-                { new: true }
+                { $set: { name: 'Updated Shopping List' } },
+                { new: true, runValidators: true }
             );
-            expect(cacheService.delete).toHaveBeenCalledWith(`shopping:${mockUserId}`);
+            // Mutation invalidates EVERY cached pagination window for the user via the glob clear.
+            expect(cacheService.clear).toHaveBeenCalledWith(`shopping:${mockUserId}:*`);
         });
 
         // Test: Not found — updating a missing or non-owned list yields a 404 AppError.
@@ -261,7 +272,7 @@ describe('ShoppingService', () => {
         it('should delete an owned list and invalidate the cache', async () => {
             // Arrange
             (ShoppingModel.findOneAndDelete as jest.Mock).mockResolvedValue(mockList);
-            cacheService.delete.mockResolvedValue(undefined);
+            cacheService.clear.mockResolvedValue(undefined);
 
             // Act & Assert — delete resolves to void on success.
             await expect(shoppingService.delete(mockUserId, mockListId)).resolves.toBeUndefined();
@@ -269,7 +280,8 @@ describe('ShoppingService', () => {
                 _id: mockListId,
                 userId: mockUserId
             });
-            expect(cacheService.delete).toHaveBeenCalledWith(`shopping:${mockUserId}`);
+            // Mutation invalidates EVERY cached pagination window for the user via the glob clear.
+            expect(cacheService.clear).toHaveBeenCalledWith(`shopping:${mockUserId}:*`);
         });
 
         // Test: Not found — deleting a missing or non-owned list yields a 404 AppError.
@@ -299,7 +311,7 @@ describe('ShoppingService', () => {
             };
             (pantryService.getPantry as jest.Mock).mockResolvedValue(mockPantry);
             (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
-            cacheService.delete.mockResolvedValue(undefined);
+            cacheService.clear.mockResolvedValue(undefined);
 
             // Act
             const result = await shoppingService.generate(mockUserId, exclusionOptions);
@@ -320,8 +332,8 @@ describe('ShoppingService', () => {
             expect(createArg.items[0].quantity).toBeLessThan(10);
             expect(createArg.items[0].quantity).toBeGreaterThan(0);
 
-            // The per-user cache is invalidated and the persisted list is returned.
-            expect(cacheService.delete).toHaveBeenCalledWith(`shopping:${mockUserId}`);
+            // The per-user cache is invalidated (all pagination windows) and the list is returned.
+            expect(cacheService.clear).toHaveBeenCalledWith(`shopping:${mockUserId}:*`);
             expect(result).toEqual(mockList);
         });
 
@@ -329,7 +341,7 @@ describe('ShoppingService', () => {
         it('should not consult the pantry when excludeInventoryItems is false', async () => {
             // Arrange — single recipe, no merge, no exclusion (servings 4 -> quantity 4).
             (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
-            cacheService.delete.mockResolvedValue(undefined);
+            cacheService.clear.mockResolvedValue(undefined);
 
             // Act
             const result = await shoppingService.generate(mockUserId, mockOptions);
@@ -345,7 +357,7 @@ describe('ShoppingService', () => {
             expect(createArg.items).toHaveLength(1);
             expect(createArg.items[0].quantity).toBe(4);
 
-            expect(cacheService.delete).toHaveBeenCalledWith(`shopping:${mockUserId}`);
+            expect(cacheService.clear).toHaveBeenCalledWith(`shopping:${mockUserId}:*`);
             expect(result).toEqual(mockList);
         });
     });
@@ -373,7 +385,7 @@ describe('ShoppingService', () => {
                 save: jest.fn().mockResolvedValue(true)
             };
             (ShoppingModel.findOne as jest.Mock).mockResolvedValue(listDoc);
-            cacheService.delete.mockResolvedValue(undefined);
+            cacheService.clear.mockResolvedValue(undefined);
 
             // Act
             const result = await shoppingService.toggleItem(mockUserId, mockListId, mockItemId);
@@ -385,7 +397,7 @@ describe('ShoppingService', () => {
             });
             expect(listDoc.items[0].checked).toBe(true);
             expect(listDoc.save).toHaveBeenCalled();
-            expect(cacheService.delete).toHaveBeenCalledWith(`shopping:${mockUserId}`);
+            expect(cacheService.clear).toHaveBeenCalledWith(`shopping:${mockUserId}:*`);
             expect(result).toBeDefined();
         });
 
@@ -419,6 +431,114 @@ describe('ShoppingService', () => {
                 shoppingService.toggleItem(mockUserId, mockListId, 'missing-item')
             ).rejects.toMatchObject({ statusCode: 404, code: 'SHOPPING_LIST_ITEM_NOT_FOUND' });
             expect(listDocNoItem.save).not.toHaveBeenCalled();
+        });
+    });
+
+    // Security / ownership-isolation. The service must never let a client-supplied body reassign
+    // ownership or smuggle server-managed fields / Mongo operators into persistence. These tests
+    // exercise the `sanitizeListData` allow-list (name + items only), the "userId applied LAST"
+    // create rule, and the allow-listed `$set` on update — directly covering the create/update
+    // ownership-drift findings (R3 user scoping) that the prior suite did not catch.
+    describe('security / input sanitization', () => {
+        // A hostile payload fragment carrying ownership, identity, audit, and operator fields.
+        // Typed as Record<string, unknown> so server-managed / operator keys (not part of
+        // IShoppingList) can be expressed, then cast to Partial<IShoppingList> at the call site.
+        const maliciousFields: Record<string, unknown> = {
+            userId: 'attacker-user',
+            _id: 'attacker-id',
+            id: 'attacker-id',
+            createdAt: new Date('2000-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2000-01-01T00:00:00.000Z'),
+            $set: { userId: 'attacker' },
+            $inc: { hacked: 1 }
+        };
+
+        it('create: strips server-managed fields/operators and forces the authenticated userId', async () => {
+            // Arrange — list payload laced with ownership/identity/audit/operator fields.
+            const malicious: Record<string, unknown> = {
+                name: 'Groceries',
+                items: [mockItem],
+                ...maliciousFields
+            };
+            (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
+            cacheService.clear.mockResolvedValue(undefined);
+
+            // Act
+            await shoppingService.create(mockUserId, malicious as Partial<IShoppingList>);
+
+            // Assert — only the allow-listed list fields plus the AUTH userId reach the model.
+            const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
+            expect(createArg.userId).toBe(mockUserId); // auth user wins, NOT 'attacker-user'
+            expect(createArg._id).toBeUndefined();
+            expect(createArg.createdAt).toBeUndefined();
+            expect(createArg.updatedAt).toBeUndefined();
+            expect(createArg.$set).toBeUndefined();
+            expect(createArg.$inc).toBeUndefined();
+            // Exactly the allow-listed surface: name, items, userId — nothing else persisted.
+            expect(Object.keys(createArg).sort()).toEqual(['items', 'name', 'userId']);
+        });
+
+        it('create: replaces any client-supplied item id with a server-generated placeholder', async () => {
+            // Arrange — a client attempts to choose its own subdocument id.
+            const malicious: Record<string, unknown> = {
+                name: 'Groceries',
+                items: [{ ...mockItem, id: 'client-chosen-id' }]
+            };
+            (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
+            cacheService.clear.mockResolvedValue(undefined);
+
+            // Act
+            await shoppingService.create(mockUserId, malicious as Partial<IShoppingList>);
+
+            // Assert — the persisted item id is NOT the client's chosen id.
+            const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
+            expect(createArg.items[0].id).not.toBe('client-chosen-id');
+            expect(typeof createArg.items[0].id).toBe('string');
+        });
+
+        it('update: reduces the payload to an allow-listed $set, dropping userId/_id/timestamps/operators', async () => {
+            // Arrange
+            const malicious: Record<string, unknown> = {
+                name: 'Renamed',
+                ...maliciousFields
+            };
+            (ShoppingModel.findOneAndUpdate as jest.Mock).mockResolvedValue(mockList);
+            cacheService.clear.mockResolvedValue(undefined);
+
+            // Act
+            await shoppingService.update(
+                mockUserId,
+                mockListId,
+                malicious as Partial<IShoppingList>
+            );
+
+            // Assert — ownership filter intact; $set carries ONLY allow-listed fields; validators on.
+            const call = (ShoppingModel.findOneAndUpdate as jest.Mock).mock.calls[0];
+            const filter = call[0];
+            const updateDoc = call[1];
+            const opts = call[2];
+            expect(filter).toEqual({ _id: mockListId, userId: mockUserId });
+            expect(updateDoc).toEqual({ $set: { name: 'Renamed' } });
+            expect(updateDoc.$set.userId).toBeUndefined();
+            expect(updateDoc.$inc).toBeUndefined();
+            expect(opts).toEqual({ new: true, runValidators: true });
+        });
+
+        it('create: passes an invalid item quantity through verbatim so schema validators reject it', async () => {
+            // Arrange — a negative quantity must NOT be silently coerced/clamped by the service.
+            const malicious: Record<string, unknown> = {
+                name: 'Bad',
+                items: [{ ...mockItem, quantity: -5 }]
+            };
+            (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
+            cacheService.clear.mockResolvedValue(undefined);
+
+            // Act
+            await shoppingService.create(mockUserId, malicious as Partial<IShoppingList>);
+
+            // Assert — the value is preserved as-is; the Mongoose `min: 0` validator is the gate.
+            const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
+            expect(createArg.items[0].quantity).toBe(-5);
         });
     });
 });

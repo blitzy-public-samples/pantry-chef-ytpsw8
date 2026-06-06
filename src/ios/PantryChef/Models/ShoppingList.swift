@@ -10,8 +10,14 @@
 import Foundation // iOS 13.0+
 
 // MARK: - Shopping List Item Model
+// Declared `public` so it can appear in the `public` method signatures of
+// `ShoppingListService` (Swift forbids a public method from exposing an internal
+// type). Stored properties stay at their existing access levels — a public class
+// may have internal members — but the `Decodable` witness `init(from:)` is
+// promoted to `public` below because a `required` initializer must be as
+// accessible as its enclosing class.
 @objc
-class ShoppingListItem: NSObject, Codable {
+public class ShoppingListItem: NSObject, Codable {
     // MARK: - Properties
     let id: String
     let name: String
@@ -81,7 +87,8 @@ class ShoppingListItem: NSObject, Codable {
     /// property is assigned before `super.init()`. `decodeIfPresent` with
     /// sensible defaults keeps decoding resilient to partial payloads (the
     /// server may omit optional or iOS-irrelevant fields).
-    required init(from decoder: Decoder) throws {
+    /// `public` to satisfy the public `Decodable` conformance of this public class.
+    public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
         self.name = try container.decode(String.self, forKey: .name)
@@ -98,7 +105,8 @@ class ShoppingListItem: NSObject, Codable {
     /// Encodes the item back to the cross-platform contract. `isPurchased` is
     /// emitted under the `checked` key (per `CodingKeys`); optional fields use
     /// `encodeIfPresent` so absent values are omitted rather than encoded as null.
-    func encode(to encoder: Encoder) throws {
+    /// `public` to satisfy the public `Encodable` conformance of this public class.
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
@@ -113,9 +121,14 @@ class ShoppingListItem: NSObject, Codable {
 }
 
 // MARK: - Shopping List Model
+// Declared `public` so it can appear in the `public` method signatures of
+// `ShoppingListService`. As with `ShoppingListItem`, the `required` `Decodable`
+// witness and the `Equatable`/`CustomStringConvertible` witnesses are promoted to
+// `public` (a witness must be at least as accessible as the public conformance);
+// other members may remain internal.
 @objc
 @objcMembers
-class ShoppingList: NSObject, Codable {
+public class ShoppingList: NSObject, Codable {
     // MARK: - Properties
     let id: String
     let name: String
@@ -253,7 +266,8 @@ class ShoppingList: NSObject, Codable {
     /// assigned before `super.init()`. The `private(set)` setters for `items`
     /// and `updatedAt` are writable here because this initializer is defined
     /// within the type that declares them.
-    required init(from decoder: Decoder) throws {
+    /// `public` to satisfy the public `Decodable` conformance of this public class.
+    public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try container.decode(String.self, forKey: .id)
         self.name = try container.decode(String.self, forKey: .name)
@@ -273,7 +287,8 @@ class ShoppingList: NSObject, Codable {
     /// Encodes the list to the cross-platform contract. Optional fields
     /// (`completedAt`, `generationOptions`) use `encodeIfPresent` so absent
     /// values are omitted rather than encoded as null.
-    func encode(to encoder: Encoder) throws {
+    /// `public` to satisfy the public `Encodable` conformance of this public class.
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
@@ -289,14 +304,18 @@ class ShoppingList: NSObject, Codable {
 
 // MARK: - Equatable
 extension ShoppingList: Equatable {
-    static func == (lhs: ShoppingList, rhs: ShoppingList) -> Bool {
+    // `public` witness: `ShoppingList` is now a public type, so its conformance to
+    // the public `Equatable` protocol is public and the `==` witness must match.
+    public static func == (lhs: ShoppingList, rhs: ShoppingList) -> Bool {
         return lhs.id == rhs.id
     }
 }
 
 // MARK: - CustomStringConvertible
 extension ShoppingList: CustomStringConvertible {
-    var description: String {
+    // `public` witness: matches the public `CustomStringConvertible` conformance of
+    // this now-public type.
+    public var description: String {
         return "ShoppingList(id: \(id), name: \(name), items: \(items.count))"
     }
 }
@@ -312,9 +331,16 @@ extension ShoppingList: CustomStringConvertible {
 // is only a tolerance for snake_case payloads (`recipe_ids`,
 // `exclude_inventory_items`, `merge_duplicates`) should any ever appear; it is
 // not required for the canonical camelCase responses.
-struct ShoppingListGenerationOptions: Codable {
-    var recipeIds: [String]
-    var servings: Int            // `Int` is sufficient; the web contract uses `number`
-    var excludeInventoryItems: Bool
-    var mergeDuplicates: Bool
+//
+// Declared `public` so it can appear in the `public` `generateList(id:options:)`
+// signature of `ShoppingListService`. Its `Codable` conformance is auto-synthesized;
+// the compiler generates witnesses at the access level the public conformance
+// requires, so no manual `init(from:)`/`encode(to:)` is needed. Properties are
+// made `public` for a clean public value type (the synthesized memberwise
+// initializer remains internal, which is sufficient for the in-module callers).
+public struct ShoppingListGenerationOptions: Codable {
+    public var recipeIds: [String]
+    public var servings: Int            // `Int` is sufficient; the web contract uses `number`
+    public var excludeInventoryItems: Bool
+    public var mergeDuplicates: Bool
 }

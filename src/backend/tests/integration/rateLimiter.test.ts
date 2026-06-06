@@ -29,8 +29,12 @@
  *   - A minimal, self-contained Express harness is used instead of the real app: the bare `app` export does not
  *     have `configureRoutes()` applied, and the image router is not mounted (AAP §0.5.2). The harness mounts the
  *     EXACT exported limiter instances, so the assertions exercise the same middleware the production routes use.
- *   - `forwardAsync` is mandatory on Express 4: the limiter throws inside an async function and Express 4 does not
- *     auto-forward a rejected async-middleware promise to the error handler (no `express-async-errors` in repo).
+ *   - The exported limiters are mounted DIRECTLY (no async-forwarding wrapper), exactly as the production image and
+ *     recipe routes mount them. The limiter middleware is self-forwarding: it runs its async check inside a
+ *     self-invoking function and funnels every outcome — success, breach (429), or failure — through `next(...)`,
+ *     so a rejected promise can never escape to become an unhandled rejection on Express 4. This suite therefore
+ *     exercises the EXACT production invocation style (the same `router.post(path, authenticate, limiter, handler)`
+ *     shape used by image.routes.ts and recipe.routes.ts).
  */
 
 import request from 'supertest';
@@ -57,23 +61,19 @@ describe('Rate Limiter Integration Tests', () => {
     const MATCH_USER = `rl-match-user-${RUN}`;
 
     /**
-     * Forwards a rejected async-middleware promise to Express's `next(err)` so the breach reaches the REAL
-     * `errorHandler` and produces the 429 envelope. This is exactly what `express-async-errors`/Express 5 do
-     * automatically; here it is implemented locally with zero new dependencies. The wrapped middleware is the
-     * unmodified, exported limiter instance — only its invocation is wrapped. The success path (next()) is
-     * unaffected.
-     */
-    const forwardAsync = (mw: any) =>
-        (req: Request, res: Response, next: NextFunction) => Promise.resolve(mw(req, res, next)).catch(next);
-
-    /**
      * Builds one self-contained Express harness per limiter:
      *   1. JSON body parsing (parity with the real app pipeline),
      *   2. an auth stub that pins `req.user.id` so the limiter keys deterministically per user,
-     *   3. POST /probe guarded by the (async-forwarded) limiter and a trivial 200 success handler,
+     *   3. POST /probe guarded by the limiter mounted DIRECTLY (production style) and a trivial 200 success handler,
      *   4. the REAL `errorHandler` registered LAST so a breach renders the unified 429 envelope.
+     *
+     * The limiter is mounted with NO wrapper, proving the exported middleware self-forwards its 429/error outcomes
+     * to `errorHandler` on Express 4 — i.e. the same invocation the production routes use.
      */
-    const makeHarness = (limiter: any, userId: string) => {
+    const makeHarness = (
+        limiter: (req: Request, res: Response, next: NextFunction) => void,
+        userId: string
+    ) => {
         const harness = express();
         harness.use(express.json());
         harness.use((req: Request, _res: Response, next: NextFunction) => {
@@ -82,7 +82,7 @@ describe('Rate Limiter Integration Tests', () => {
         });
         harness.post(
             '/probe',
-            forwardAsync(limiter),
+            limiter,
             (_req: Request, res: Response) => res.status(200).json({ success: true })
         );
         harness.use(errorHandler); // REAL error middleware → unified 429 envelope

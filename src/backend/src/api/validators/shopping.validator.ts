@@ -24,6 +24,18 @@ const validateObjectId = (value: string): boolean => {
 // sanitized; `items` is an optional array whose element shape is validated only when
 // present. Item identifiers are NOT validated here because they are server-assigned.
 export const createShoppingListValidation = [
+  // Requirement: Security / Ownership Isolation - reject server-managed fields.
+  // These fields are owned by the server (ownership, identity, audit timestamps) and MUST NOT
+  // be client-supplied; their presence is rejected with 400 so a caller cannot attempt to
+  // reassign ownership or forge identity/audit metadata. This is the validator-layer complement
+  // to the controller DTO construction and the ShoppingService allow-list sanitizer (defense in
+  // depth against the create/update ownership-drift findings; R3 user scoping).
+  body('userId').not().exists().withMessage('userId cannot be set by the client'),
+  body('_id').not().exists().withMessage('_id cannot be set by the client'),
+  body('id').not().exists().withMessage('id cannot be set by the client'),
+  body('createdAt').not().exists().withMessage('createdAt cannot be set by the client'),
+  body('updatedAt').not().exists().withMessage('updatedAt cannot be set by the client'),
+
   body('name')
     .trim()
     .escape()
@@ -96,6 +108,16 @@ export const createShoppingListValidation = [
 // they enforce the same shape as creation, with item element checks made optional too.
 export const updateShoppingListValidation = [
   param('id').trim().custom(validateObjectId).withMessage('Invalid shopping list ID format'),
+
+  // Requirement: Security / Ownership Isolation - reject server-managed fields on update.
+  // Mirrors the create-chain forbids: a client cannot smuggle ownership/identity/audit fields
+  // through PUT. Combined with the controller DTO and the service `$set` allow-list, this
+  // closes the update-time ownership-drift vector (R3 user scoping).
+  body('userId').not().exists().withMessage('userId cannot be set by the client'),
+  body('_id').not().exists().withMessage('_id cannot be set by the client'),
+  body('id').not().exists().withMessage('id cannot be set by the client'),
+  body('createdAt').not().exists().withMessage('createdAt cannot be set by the client'),
+  body('updatedAt').not().exists().withMessage('updatedAt cannot be set by the client'),
 
   body('name')
     .optional()
@@ -196,4 +218,13 @@ export const toggleItemValidation = [
   param('id').trim().custom(validateObjectId).withMessage('Invalid shopping list ID format'),
 
   param('itemId').trim().custom(validateObjectId).withMessage('Invalid item ID format'),
+];
+
+// Requirement: Data Validation - Delete shopping list validation
+// Validates the delete route's `id` path param is a well-formed ObjectId so an invalid id is
+// rejected with a 400 (consistent with the other mutating routes) instead of reaching Mongoose
+// and surfacing as a CastError/500. Attached to `DELETE /:id` in shopping.routes.ts; the
+// controller runs the shared validationResult guard before delegating to the service.
+export const deleteShoppingListValidation = [
+  param('id').trim().custom(validateObjectId).withMessage('Invalid shopping list ID format'),
 ];

@@ -141,19 +141,29 @@ const ShoppingService = {
   },
 
   /**
-   * Updates a specific item in a shopping list
+   * Toggles the `checked` state of a specific item in a shopping list.
+   *
+   * Targets the PATCH toggle route from the authoritative contract
+   * (`/api/v1/shopping-lists/:id/items/:itemId/toggle`), which the backend
+   * controller answers with the FULL updated `ShoppingList` — not the single
+   * toggled item. This method therefore resolves to `ShoppingList`, matching the
+   * backend's authoritative response contract and the iOS
+   * `ShoppingListService.toggleItem` for cross-platform consistency (R8). The
+   * unified envelope `{ success, data, metadata }` is unwrapped to `data` so
+   * callers receive the domain list directly.
+   *
    * Requirement: Shopping List Management
    */
   async updateShoppingListItem(
     listId: string, 
     itemId: string, 
     data: Partial<ShoppingListItem>
-  ): Promise<ShoppingListItem> {
+  ): Promise<ShoppingList> {
     try {
       const endpoint = SHOPPING_API.TOGGLE
         .replace(':id', listId)
         .replace(':itemId', itemId);
-      const response = await apiClient.patch<ApiEnvelope<ShoppingListItem>>(endpoint, data);
+      const response = await apiClient.patch<ApiEnvelope<ShoppingList>>(endpoint, data);
       return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);

@@ -9,15 +9,16 @@
  *    potential list-enumeration attempts.
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { container } from 'tsyringe';
 import { ShoppingController } from '../controllers/shopping.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authenticate, AuthenticatedRequest } from '../middlewares/auth.middleware';
 import {
   createShoppingListValidation,
   updateShoppingListValidation,
   generateShoppingListValidation,
   toggleItemValidation,
+  deleteShoppingListValidation,
 } from '../validators/shopping.validator';
 
 /**
@@ -42,10 +43,17 @@ const shoppingController = container.resolve(ShoppingController);
 // Apply authentication middleware to protect all shopping list routes.
 // `authenticate` is an async middleware that fully manages its own lifecycle: it calls
 // `next()` on success and `next(error)` on every failure path (see auth.middleware.ts), so it
-// never leaves a floating rejection. Express ignores a middleware's return value, making the
-// no-misused-promises warning a false-positive for this safe, established registration pattern.
-// eslint-disable-next-line @typescript-eslint/no-misused-promises
-router.use(authenticate);
+// never leaves a floating rejection. It is wrapped in a synchronous, void-returning middleware
+// so its promise is explicitly discarded — this satisfies Express's void-returning
+// RequestHandler contract (the async function's `Promise<void>` return does not match the
+// `router.use` overload directly) and avoids the no-misused-promises lint without a suppression.
+router.use((req: Request, res: Response, next: NextFunction): void => {
+  // `authenticate` is typed against `AuthenticatedRequest` (Request + the optional `user`/
+  // `tokenPayload` it populates). A plain `Request` is not structurally assignable to that
+  // type, and the wrapper param must stay `Request` to satisfy `router.use`'s RequestHandler
+  // contract (contravariant req position), so the request is upcast at the call site.
+  void authenticate(req as AuthenticatedRequest, res, next);
+});
 
 /**
  * Each handler delegates to the resolved `ShoppingController`, forwarding `(req, res, next)`
@@ -55,38 +63,56 @@ router.use(authenticate);
  * must not surface a floating/misused promise to Express's void-returning handler contract.
  */
 
-// GET /api/v1/shopping-lists/shopping-lists — list the authenticated user's shopping lists
-router.get('/shopping-lists', (req, res, next) => void shoppingController.getLists(req, res, next));
+// GET /api/v1/shopping-lists — list the authenticated user's shopping lists.
+// Router-relative path is '/' (the collection root); the resource segment lives in the
+// mount point in routes/index.ts, so the effective URL is GET /api/v1/shopping-lists.
+// This single-segment path matches the web service and e2e/iOS clients (R4/R8 contract).
+router.get(
+  '/',
+  (req: Request, res: Response, next: NextFunction) =>
+    void shoppingController.getLists(req, res, next)
+);
 
 // POST /api/v1/shopping-lists — create a new shopping list
 router.post(
   '/',
   createShoppingListValidation,
-  (req, res, next) => void shoppingController.create(req, res, next)
+  (req: Request, res: Response, next: NextFunction) =>
+    void shoppingController.create(req, res, next)
 );
 
 // PUT /api/v1/shopping-lists/:id — update a shopping list
 router.put(
   '/:id',
   updateShoppingListValidation,
-  (req, res, next) => void shoppingController.update(req, res, next)
+  (req: Request, res: Response, next: NextFunction) =>
+    void shoppingController.update(req, res, next)
 );
 
-// DELETE /api/v1/shopping-lists/:id — delete a shopping list
-router.delete('/:id', (req, res, next) => void shoppingController.delete(req, res, next));
+// DELETE /api/v1/shopping-lists/:id — delete a shopping list.
+// The delete validator enforces a well-formed ObjectId on :id so an invalid id is rejected
+// with a 400 (matching the other mutating routes) instead of reaching Mongoose as a CastError.
+router.delete(
+  '/:id',
+  deleteShoppingListValidation,
+  (req: Request, res: Response, next: NextFunction) =>
+    void shoppingController.delete(req, res, next)
+);
 
 // POST /api/v1/shopping-lists/:id/generate — generate list items (pantry inventory exclusion)
 router.post(
   '/:id/generate',
   generateShoppingListValidation,
-  (req, res, next) => void shoppingController.generate(req, res, next)
+  (req: Request, res: Response, next: NextFunction) =>
+    void shoppingController.generate(req, res, next)
 );
 
 // PATCH /api/v1/shopping-lists/:id/items/:itemId/toggle — toggle a single item's checked state
 router.patch(
   '/:id/items/:itemId/toggle',
   toggleItemValidation,
-  (req, res, next) => void shoppingController.toggleItem(req, res, next)
+  (req: Request, res: Response, next: NextFunction) =>
+    void shoppingController.toggleItem(req, res, next)
 );
 
 export default router;
