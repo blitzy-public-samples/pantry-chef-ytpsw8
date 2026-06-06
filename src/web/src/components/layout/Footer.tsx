@@ -21,7 +21,12 @@ import { APP_ROUTES } from '../../config/constants';
  * - Web Dashboard Layout: Responsive design with consistent styling
  * - Frontend UI Framework: Material Design implementation
  */
-const Footer: React.FC = () => {
+// Exported as BOTH a named and a default export, matching the sibling layout
+// components Header.tsx and Sidebar.tsx. MainLayout.tsx imports it as `{ Footer }`
+// (named); without the named export `Footer` resolved to `undefined`, throwing
+// React's "Element type is invalid ... got: undefined" and crashing every page
+// rendered through MainLayout (including the shopping pages).
+export const Footer: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 

@@ -367,9 +367,11 @@ export class ShoppingController {
    * (`$set`, `$inc`, ...). This helper is the controller-boundary half of a defense-in-depth
    * allow-list (the authoritative second half is `ShoppingService.sanitizeListData`): it
    * copies through ONLY the two client-editable list fields - `name` and `items` - and, for
-   * each item, ONLY the eight client-editable content fields. The per-item `id` is left as an
-   * empty placeholder for the service to overwrite with a server-side identifier, so a client
-   * can never inject a chosen subdocument id.
+   * each item, ONLY the eight client-editable content fields plus the item `id`. The per-item
+   * `id` is forwarded (not blanked) so the service can preserve an existing server-assigned
+   * ObjectId across a PUT full-replace (item-identity stability); the service honors the id
+   * ONLY when it is a well-formed ObjectId, so a client still cannot inject a chosen
+   * subdocument identity for a new item.
    *
    * Item values are copied verbatim (not coerced): an invalid value such as a negative
    * `quantity` is intentionally preserved so the schema validators reject it with a
@@ -389,7 +391,14 @@ export class ShoppingController {
     if (Array.isArray(body.items)) {
       dto.items = body.items.map(
         (item): IShoppingListItem => ({
-          id: '',
+          // Pass the client-supplied item id through (when it is a string) rather than
+          // blanking it: on a PUT full-replace the client re-sends items that already
+          // carry their server-assigned ObjectId, and the service preserves that identity
+          // (only a well-formed ObjectId is honored — see ShoppingService.sanitizeItems).
+          // A new item with no id (or a non-ObjectId client id such as a web
+          // crypto.randomUUID()) still yields a freshly-minted server id, so a client
+          // cannot inject a chosen subdocument identity.
+          id: typeof item.id === 'string' ? item.id : '',
           name: item.name,
           quantity: item.quantity,
           unit: item.unit,

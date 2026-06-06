@@ -40,6 +40,15 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 
 /**
+ * Strict 24-hex-character MongoDB ObjectId pattern. Used by {@link ShoppingService.sanitizeItems}
+ * to decide whether a client-supplied item id is a real server-assigned subdocument id (which is
+ * then preserved across a PUT full-replace for item-identity stability) versus a value that must
+ * be ignored so Mongoose mints a fresh id (a new item, an empty placeholder, or a non-ObjectId
+ * client id such as a web `crypto.randomUUID()`).
+ */
+const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
+
+/**
  * Internal pairing of a generated shopping-list item with the canonical ingredient
  * id it was sourced from.
  *
@@ -51,6 +60,41 @@ const MAX_PAGE_SIZE = 100;
 interface GenerationCandidate {
   ingredientKey: string;
   item: IShoppingListItem;
+}
+
+/**
+ * Internal write-shape for a shopping-list item being persisted on create/update.
+ *
+ * Identical to the client-editable content fields of {@link IShoppingListItem}, but the identity
+ * field is the Mongo-native optional `_id` (NOT the `id` virtual, which Mongoose ignores on
+ * write): when a client re-sends an item that already carries its server-assigned ObjectId, that
+ * id is carried through as `_id` so Mongoose REUSES the existing subdocument identity on a PUT
+ * full-replace instead of minting a new one (fixes item-id churn across updates). When `_id` is
+ * omitted (a new item, or a non-ObjectId client id), Mongoose assigns a fresh `_id`. Identity
+ * stays server-controlled (only a well-formed ObjectId is honored) and list-local (items are
+ * embedded subdocuments of an owner-scoped list), so a client can neither forge a new identity
+ * nor reference another user's data.
+ */
+interface ShoppingItemWriteModel {
+  _id?: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  category: string;
+  checked: boolean;
+  notes: string;
+  recipeId: string;
+  recipeName: string;
+}
+
+/**
+ * Allow-listed, Mongo-ready shape produced by {@link ShoppingService.sanitizeListData} for the
+ * create/update write paths: only the editable list `name` and the allow-listed `items` survive,
+ * with each item reduced to {@link ShoppingItemWriteModel}.
+ */
+interface SanitizedListData {
+  name?: string;
+  items?: ShoppingItemWriteModel[];
 }
 
 /**
@@ -649,8 +693,8 @@ export class ShoppingService {
    * caller bypasses the controller DTO and passes a raw request body (R3 user
    * scoping; security/ownership-isolation findings).
    */
-  private sanitizeListData(data: Partial<IShoppingList>): Partial<IShoppingList> {
-    const clean: Partial<IShoppingList> = {};
+  private sanitizeListData(data: Partial<IShoppingList>): SanitizedListData {
+    const clean: SanitizedListData = {};
     if (typeof data.name === 'string') {
       clean.name = data.name;
     }
@@ -661,21 +705,23 @@ export class ShoppingService {
   }
 
   /**
-   * Allow-lists each shopping-list item to the client-editable item fields.
+   * Allow-lists each shopping-list item to the client-editable content fields, mapping it onto the
+   * Mongo-ready {@link ShoppingItemWriteModel}.
    *
-   * A fresh server-side placeholder `id` is assigned per item so a client can
-   * never inject a chosen subdocument identifier (Mongoose assigns the
-   * authoritative `_id` on persistence regardless). The eight content fields are
-   * copied through verbatim — invalid values (e.g. a negative `quantity`, or a
-   * missing required field) are intentionally NOT coerced here so the schema
-   * validators (`runValidators` on update, and `create`'s implicit validation)
-   * reject them, surfacing a validation error rather than silently persisting
-   * bad data.
+   * Item identity is preserved across a PUT full-replace: when the client re-sends an item that
+   * carries its server-assigned ObjectId, that id is forwarded as `_id` so Mongoose REUSES the
+   * existing subdocument identity instead of minting a new one (fixes the item-id churn reported in
+   * QA finding 1.4-B). Only a well-formed 24-hex ObjectId is honored — a new item, an empty
+   * placeholder, or a non-ObjectId client id (e.g. a web `crypto.randomUUID()`) leaves `_id` unset
+   * so Mongoose assigns a fresh authoritative id; a client therefore can never forge a chosen
+   * identity for a new item. The eight content fields are copied through verbatim — invalid values
+   * (e.g. a negative `quantity`, or a missing required field) are intentionally NOT coerced here so
+   * the schema validators (`runValidators` on update, and `create`'s implicit validation) reject
+   * them, surfacing a validation error rather than silently persisting bad data.
    */
-  private sanitizeItems(items: IShoppingListItem[]): IShoppingListItem[] {
-    return items.map(
-      (item, index): IShoppingListItem => ({
-        id: this.buildGeneratedItemId(index),
+  private sanitizeItems(items: IShoppingListItem[]): ShoppingItemWriteModel[] {
+    return items.map((item): ShoppingItemWriteModel => {
+      const writeItem: ShoppingItemWriteModel = {
         name: item.name,
         quantity: item.quantity,
         unit: item.unit,
@@ -684,7 +730,14 @@ export class ShoppingService {
         notes: item.notes,
         recipeId: item.recipeId,
         recipeName: item.recipeName,
-      })
-    );
+      };
+      // Preserve an existing server-assigned ObjectId so a PUT full-replace keeps item identity
+      // stable; ignore any non-ObjectId id (new item / web crypto.randomUUID() / empty placeholder)
+      // so Mongoose mints a fresh subdocument id.
+      if (typeof item.id === 'string' && OBJECT_ID_PATTERN.test(item.id)) {
+        writeItem._id = item.id;
+      }
+      return writeItem;
+    });
   }
 }

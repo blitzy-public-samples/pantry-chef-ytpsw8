@@ -1,7 +1,16 @@
+// @version reflect-metadata ^0.1.13
 // @version cluster ^1.0.0
 // @version os ^1.0.0
 // @version dotenv ^16.0.0
 
+// MUST be the very first import in the process entry point: tsyringe's
+// constructor-injection decorators (@injectable / @inject) read parameter type
+// metadata that the TypeScript compiler only emits when reflect-metadata has
+// installed its global Reflect.metadata polyfill. Importing it here (before any
+// decorated class — RecipeController, ShoppingController, the @injectable
+// services — is transitively loaded via ./app) is what lets the application
+// boot under DI exactly as the test harness already does (tests/setup.ts).
+import 'reflect-metadata';
 import cluster from 'cluster';
 import os from 'os';
 import dotenv from 'dotenv';

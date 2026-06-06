@@ -36,7 +36,16 @@ export const createShoppingListValidation = [
   body('createdAt').not().exists().withMessage('createdAt cannot be set by the client'),
   body('updatedAt').not().exists().withMessage('updatedAt cannot be set by the client'),
 
+  // `.isString().bail()` guards the type BEFORE the `.trim()` sanitizer runs: without
+  // it, a non-string `name` (e.g. a JSON object `{ "$gt": "" }`) is silently coerced by
+  // `.trim()` to the literal `"[object Object]"`, which then passes `isLength(1-100)` and
+  // is accepted. The guard rejects any non-string `name` with 400 (defense-in-depth; the
+  // operator never reaches Mongo as an operator, but a non-string name is invalid input).
+  // Mirrors the existing `recipeIds.*` `.isString()...bail()` convention below.
   body('name')
+    .isString()
+    .withMessage('Shopping list name must be a string')
+    .bail()
     .trim()
     .escape()
     .isLength({ min: 1, max: 100 })
@@ -49,7 +58,12 @@ export const createShoppingListValidation = [
   // markup-like values can neither be persisted nor later replayed by the
   // web/iOS clients (stored-XSS / dirty-data defense), mirroring the top-level
   // `name` sanitizer above and the pantry/recipe validator conventions.
+  // `.isString().bail()` first so a non-string item name is rejected (400) rather
+  // than coerced by `.trim()` (same defense-in-depth rationale as the list `name`).
   body('items.*.name')
+    .isString()
+    .withMessage('Shopping list item name must be a string')
+    .bail()
     .trim()
     .escape()
     .notEmpty()
@@ -121,6 +135,9 @@ export const updateShoppingListValidation = [
 
   body('name')
     .optional()
+    .isString()
+    .withMessage('Shopping list name must be a string')
+    .bail()
     .trim()
     .escape()
     .isLength({ min: 1, max: 100 })
@@ -130,6 +147,9 @@ export const updateShoppingListValidation = [
 
   body('items.*.name')
     .optional()
+    .isString()
+    .withMessage('Shopping list item name must be a string')
+    .bail()
     .trim()
     .escape()
     .notEmpty()

@@ -20,21 +20,36 @@ import {
 import { apiClient, handleApiError } from '../utils/api';
 
 // API endpoints for shopping list operations.
-// These mirror the authoritative six-route backend contract exactly (R4/R8):
-// the create/update/delete operations target the mount base, while the collection
-// GET targets the intentional doubled segment the backend registers (see LISTS).
+//
+// These are paths RELATIVE to the shared axios client's baseURL, which is already
+// `${origin}/api/v1` (see src/config/constants.ts API_CONFIG.BASE_URL and
+// src/config/api.ts `baseURL: BASE_URL`). The whole web app follows this convention:
+// every sibling endpoint in API_ENDPOINTS (e.g. AUTH.LOGIN '/auth/login',
+// PANTRY.ADD '/pantry/items', RECIPES.MATCH '/recipes/match') is declared WITHOUT a
+// leading `/api/v1`, and apiClient prepends it. These constants must do the same —
+// embedding `/api/v1` here caused apiClient to emit a doubled
+// `/api/v1/api/v1/shopping-lists/...` URL that 404s against the backend.
+//
+// They still mirror the authoritative six-route backend contract exactly (R4/R8):
+// create/update/delete target the mount base, while the collection GET targets the
+// intentional doubled SEGMENT the backend registers (see LISTS). Resolved URLs:
+//   BASE     -> /api/v1/shopping-lists                       (POST /, PUT /:id, DELETE /:id)
+//   LISTS    -> /api/v1/shopping-lists/shopping-lists        (GET collection)
+//   GENERATE -> /api/v1/shopping-lists/:id/generate          (POST)
+//   TOGGLE   -> /api/v1/shopping-lists/:id/items/:itemId/toggle (PATCH)
 const SHOPPING_API = {
-  // Mount base — create (POST /), update (PUT /:id), delete (DELETE /:id):
-  // effective /api/v1/shopping-lists and /api/v1/shopping-lists/:id.
-  BASE: '/api/v1/shopping-lists',
-  // Collection GET is the INTENTIONAL doubled segment: the backend registers the
-  // router-relative GET at '/shopping-lists' under the '/api/v1/shopping-lists'
-  // mount, so the effective list URL is /api/v1/shopping-lists/shopping-lists.
+  // Mount base — create (POST /), update (PUT /:id), delete (DELETE /:id).
+  BASE: '/shopping-lists',
+  // Collection GET is the INTENTIONAL doubled SEGMENT: the backend registers the
+  // router-relative GET at '/shopping-lists' under the '/shopping-lists' mount, so
+  // the effective list URL is /api/v1/shopping-lists/shopping-lists.
   // Used ONLY by getShoppingLists(); every other operation uses BASE.
-  LISTS: '/api/v1/shopping-lists/shopping-lists',
-  GENERATE: '/api/v1/shopping-lists/:id/generate',
-  ITEMS: '/api/v1/shopping-lists/:id/items',
-  TOGGLE: '/api/v1/shopping-lists/:id/items/:itemId/toggle'
+  LISTS: '/shopping-lists/shopping-lists',
+  GENERATE: '/shopping-lists/:id/generate',
+  // NOTE (Finding 1.1-B): a standalone per-item collection constant was removed as dead code.
+  // The authoritative six-route contract has no `/:id/items` endpoint — per-item mutations are
+  // expressed via the full-list PUT (/:id) or the toggle PATCH (/:id/items/:itemId/toggle below).
+  TOGGLE: '/shopping-lists/:id/items/:itemId/toggle'
 };
 
 /**

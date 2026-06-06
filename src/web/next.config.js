@@ -5,8 +5,13 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true'
 });
 
-// Import API configuration constants
-const { BASE_URL } = require('./src/config/constants');
+// API base URL for the `env` block below. This file is plain CommonJS executed
+// by Node during `next build`/`next dev`, so it CANNOT `require('./src/config/constants')`
+// (a TypeScript module Node cannot load) — doing so threw at config evaluation and
+// prevented the dev/build server from booting. We instead read the same env var the
+// TS `API_CONFIG.BASE_URL` reads, with the identical localhost fallback, so behavior
+// is unchanged.
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api/v1';
 
 /**
  * HUMAN TASKS:
@@ -112,25 +117,15 @@ const nextConfig = {
       config.optimization.minimize = true;
     }
 
-    // Add custom webpack rules
-    config.module.rules.push(
-      // TypeScript/JavaScript processing
-      {
-        test: /\.(ts|js)x?$/,
-        exclude: /node_modules/,
-        use: {
-          loader: 'babel-loader',
-          options: {
-            presets: ['next/babel']
-          }
-        }
-      },
-      // CSS/SASS processing
-      {
-        test: /\.scss$/,
-        use: ['style-loader', 'css-loader', 'sass-loader']
-      }
-    );
+    // NOTE: previously this pushed two custom module rules that broke every build:
+    //   (1) a `babel-loader` rule for ts/js — `babel-loader` is not installed AND it
+    //       duplicated/overrode Next 13's built-in SWC transpilation, 500-ing every page;
+    //   (2) a `style-loader/css-loader/sass-loader` rule for `.scss` that DISABLED Next's
+    //       built-in CSS pipeline, so `src/styles/globals.css` (which uses `@tailwind`
+    //       directives handled by postcss.config.js + tailwind.config.js) failed with
+    //       "Unexpected character '@'", 500-ing every page.
+    // Both are removed: Next 13's built-in SWC + PostCSS/Tailwind pipeline already handles
+    // TS/JS and CSS (including SCSS) natively. The splitChunks/minimize tuning above is kept.
 
     return config;
   },

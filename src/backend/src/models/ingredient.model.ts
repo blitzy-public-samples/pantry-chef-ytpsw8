@@ -17,6 +17,22 @@ import {
 // Extend Document for Mongoose typing
 export interface IngredientDocument extends Ingredient, Document {}
 
+/**
+ * Validates that a shelf-life value is a positive number.
+ *
+ * Declared at module scope (rather than as an instance method) so it can be
+ * referenced from inside the schema definition passed to `super({...})`.
+ * Referencing it as `this.validateShelfLife` there was a this-before-super
+ * access — a compile error (TS17009) that also threw at runtime in the compiled
+ * output, preventing this model (and therefore application boot) from loading.
+ *
+ * @param value - The shelf life value to validate
+ * @returns boolean indicating whether the value is a positive number
+ */
+function validateShelfLife(value: number): boolean {
+    return typeof value === 'number' && value > 0;
+}
+
 // Create IngredientSchema class for Mongoose schema definition
 class IngredientSchema extends Schema {
     constructor() {
@@ -101,7 +117,7 @@ class IngredientSchema extends Schema {
                         type: Number,
                         required: [true, 'Refrigerated shelf life is required'],
                         validate: {
-                            validator: this.validateShelfLife,
+                            validator: validateShelfLife,
                             message: 'Shelf life must be a positive number'
                         }
                     },
@@ -109,7 +125,7 @@ class IngredientSchema extends Schema {
                         type: Number,
                         required: [true, 'Frozen shelf life is required'],
                         validate: {
-                            validator: this.validateShelfLife,
+                            validator: validateShelfLife,
                             message: 'Shelf life must be a positive number'
                         }
                     },
@@ -117,7 +133,7 @@ class IngredientSchema extends Schema {
                         type: Number,
                         required: [true, 'Pantry shelf life is required'],
                         validate: {
-                            validator: this.validateShelfLife,
+                            validator: validateShelfLife,
                             message: 'Shelf life must be a positive number'
                         }
                     }
@@ -145,15 +161,6 @@ class IngredientSchema extends Schema {
                 recognitionTags: 5
             }
         });
-    }
-
-    /**
-     * Validates that shelf life values are positive numbers
-     * @param value - The shelf life value to validate
-     * @returns boolean indicating if the value is valid
-     */
-    private validateShelfLife(value: number): boolean {
-        return typeof value === 'number' && value > 0;
     }
 }
 

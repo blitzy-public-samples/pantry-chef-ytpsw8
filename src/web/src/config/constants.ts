@@ -18,6 +18,16 @@ export const API_CONFIG = {
   RETRY_ATTEMPTS: 3
 } as const;
 
+// Top-level re-exports of the two API_CONFIG members that `src/config/api.ts`
+// consumes by name (`import { BASE_URL, TIMEOUT } from './constants'`). Without
+// these, that import resolved to `undefined`, so the shared axios client was
+// created with `baseURL: undefined` and `timeout: undefined` — every request
+// then went out as a relative URL against the Next origin and never reached the
+// backend. Exposing them as named top-level constants (sourced from the single
+// API_CONFIG source of truth) fixes the client wiring without duplicating values.
+export const BASE_URL = API_CONFIG.BASE_URL;
+export const TIMEOUT = API_CONFIG.TIMEOUT;
+
 // Requirement: Security Configuration (9.1 Authentication and Authorization/9.1.1 Authentication Flow)
 export const AUTH_CONSTANTS = {
   TOKEN_KEY: 'pantrychef_access_token',

@@ -192,5 +192,18 @@ export const authSlice = createSlice({
 // Export actions
 export const { clearError, resetAuth } = authSlice.actions;
 
+/**
+ * Selector returning the auth slice of root state.
+ *
+ * `useAuth` (src/hooks/useAuth.ts) imports and passes this to `useSelector`, but the
+ * selector was never defined here — so `selectAuth` resolved to `undefined` and
+ * `useSelector(undefined)` threw "You must pass a selector to useSelector" at hydration,
+ * crashing every page rendered through the shared MainLayout (including the shopping
+ * pages). Typed structurally against `{ auth: AuthState }` so it is assignable to the
+ * react-redux selector signature without importing `RootState` (which would create an
+ * authSlice <-> store circular import).
+ */
+export const selectAuth = (state: { auth: AuthState }): AuthState => state.auth;
+
 // Export reducer
 export default authSlice.reducer;

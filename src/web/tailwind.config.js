@@ -66,6 +66,23 @@ module.exports = {
           main: '#16a34a',
           light: '#22c55e',
           dark: '#15803d'
+        },
+
+        // Surface/background tokens. globals.css (`bg-background`,
+        // `dark:bg-background-dark`), MainLayout.tsx (the shared app shell) and
+        // signup.tsx reference these semantic color names; they were used but never
+        // defined here, so Tailwind threw "The `bg-background` class does not exist"
+        // and 500'd every page. DEFAULT = light page surface, `dark` = dark-mode surface.
+        background: {
+          DEFAULT: '#ffffff',
+          dark: '#0f172a'
+        },
+
+        // Semantic text colors consumed via `text-text-primary` / `text-text-secondary`
+        // (and the typography prose overrides) in globals.css and the shared layout.
+        text: {
+          primary: '#111827',
+          secondary: '#4b5563'
         }
       },
 

@@ -13,11 +13,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { Recipe } from '../../interfaces/recipe.interface';
 import { RecipeService } from '../../services/recipe.service';
-import { 
-    validateCreateRecipe, 
-    validateUpdateRecipe, 
-    validateRecipeQuery 
-} from '../validators/recipe.validator';
+// NOTE: request validation for recipe routes is applied at the router level in
+// recipe.routes.ts (validateCreateRecipe()/validateUpdateRecipe()/
+// validateRecipeQuery() are express-validator middleware chains). They were
+// previously also (incorrectly) applied here as method decorators — a
+// validator-chain array is not a valid TS method decorator, which threw at
+// class-definition time and prevented the recipe router (and the whole route
+// aggregator) from loading. The decorators have been removed; validation
+// continues to run via the route middleware chains.
 import { errorHandler } from '../middlewares/error.middleware';
 import { logger } from '../../utils/logger';
 
@@ -47,7 +50,6 @@ export class RecipeController {
      * Creates a new recipe with validation
      * Requirement: Recipe Management - Smart recipe matching based on available ingredients
      */
-    @validateCreateRecipe()
     public async createRecipe(
         req: Request,
         res: Response,
@@ -132,7 +134,6 @@ export class RecipeController {
      * Updates an existing recipe with validation
      * Requirement: Recipe Management - Recipe data management
      */
-    @validateUpdateRecipe()
     public async updateRecipe(
         req: Request,
         res: Response,
@@ -200,7 +201,6 @@ export class RecipeController {
      * Searches recipes with filters and pagination
      * Requirement: Recipe Discovery - Recipe and ingredient search functionality
      */
-    @validateRecipeQuery()
     public async searchRecipes(
         req: Request,
         res: Response,

@@ -1,4 +1,10 @@
-import { S3, CloudWatch } from 'aws-sdk'; // ^2.1.0
+// The default import binds the `AWS` namespace object (used below for the
+// SDK-wide `AWS.config.*` settings), while the named imports keep the existing
+// `S3`/`CloudWatch` client constructors. `esModuleInterop` is enabled in
+// tsconfig, so the default import resolves the aws-sdk CommonJS module export
+// correctly. Without the `AWS` binding this module threw a runtime
+// `ReferenceError: AWS is not defined` at first use, breaking application boot.
+import AWS, { S3, CloudWatch } from 'aws-sdk'; // ^2.1.0
 import dotenv from 'dotenv'; // ^16.0.0
 import { STORAGE_CONSTANTS } from '../utils/constants';
 import logger from '../utils/logger';

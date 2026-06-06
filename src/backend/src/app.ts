@@ -1,8 +1,16 @@
+// @version reflect-metadata ^0.1.13
 // @version express ^4.18.0
 // @version dotenv ^16.0.0
 // @version compression ^1.7.4
 // @version helmet ^4.6.0
 
+// MUST be the first import: this module transitively loads the DI route
+// aggregator (./api/routes -> recipe/shopping controllers resolved through
+// tsyringe's container.resolve), and tsyringe relies on reflect-metadata's
+// global polyfill being installed before any @injectable/@inject decorated
+// class is evaluated. Importing it here guarantees correct metadata regardless
+// of whether the process is started via ./server or app is imported directly.
+import 'reflect-metadata';
 import express, { Application } from 'express';
 import dotenv from 'dotenv';
 import compression from 'compression';

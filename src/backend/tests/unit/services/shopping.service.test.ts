@@ -669,22 +669,37 @@ describe('ShoppingService', () => {
             expect(Object.keys(createArg).sort()).toEqual(['items', 'name', 'userId']);
         });
 
-        it('create: replaces any client-supplied item id with a server-generated placeholder', async () => {
-            // Arrange — a client attempts to choose its own subdocument id.
-            const malicious: Record<string, unknown> = {
+        it('create/update: ignores a non-ObjectId client item id (Mongoose mints a fresh _id) but preserves a valid ObjectId as _id for item-identity stability (Finding 1.4-B)', async () => {
+            // Arrange — one item carries a NON-ObjectId client id (must be ignored so Mongoose
+            // assigns a fresh authoritative _id, so a client cannot forge a chosen identity for a
+            // new item), and one carries a well-formed 24-hex ObjectId (must be preserved as _id so
+            // a PUT full-replace keeps item identity stable — the core of Finding 1.4-B).
+            const validObjectId = '507f1f77bcf86cd799439011';
+            const payload: Record<string, unknown> = {
                 name: 'Groceries',
-                items: [{ ...mockItem, id: 'client-chosen-id' }]
+                items: [
+                    { ...mockItem, id: 'client-chosen-id' },
+                    { ...mockItem, id: validObjectId }
+                ]
             };
             (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
             cacheService.clear.mockResolvedValue(undefined);
 
             // Act
-            await shoppingService.create(mockUserId, malicious as Partial<IShoppingList>);
+            await shoppingService.create(mockUserId, payload as Partial<IShoppingList>);
 
-            // Assert — the persisted item id is NOT the client's chosen id.
+            // Assert — inspect the document handed to the (mocked) model.create, i.e. the sanitized
+            // write shape BEFORE Mongoose assigns subdocument ids.
             const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
-            expect(createArg.items[0].id).not.toBe('client-chosen-id');
-            expect(typeof createArg.items[0].id).toBe('string');
+
+            // The non-ObjectId client id is neither forwarded as `_id` nor echoed as `id`, so the
+            // server never honors a forged identity for a new item; Mongoose mints a fresh _id.
+            expect(createArg.items[0]._id).toBeUndefined();
+            expect(createArg.items[0].id).toBeUndefined();
+
+            // The well-formed ObjectId is preserved verbatim as `_id`, so re-sending an item on a
+            // PUT full-replace reuses the existing subdocument identity (no item-id churn).
+            expect(createArg.items[1]._id).toBe(validObjectId);
         });
 
         it('update: reduces the payload to an allow-listed $set, dropping userId/_id/timestamps/operators', async () => {
