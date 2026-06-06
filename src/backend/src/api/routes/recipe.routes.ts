@@ -12,7 +12,7 @@
 import { Router } from 'express';
 import { RecipeController } from '../controllers/recipe.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
-import { rateLimiterMiddleware } from '../middlewares/rateLimiter.middleware';
+import { rateLimiterMiddleware, recipeMatchLimiter } from '../middlewares/rateLimiter.middleware';
 import {
     validateCreateRecipe,
     validateUpdateRecipe,
@@ -112,11 +112,7 @@ export class RecipeRouter {
         this.router.post(
             '/match',
             authenticate,
-            rateLimiterMiddleware({
-                points: 30,
-                duration: 3600,
-                keyPrefix: 'recipe:match'
-            }),
+            recipeMatchLimiter,
             this.recipeController.findRecipesByIngredients.bind(this.recipeController)
         );
 
