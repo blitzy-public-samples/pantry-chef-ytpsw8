@@ -21,10 +21,11 @@ import { apiClient, handleApiError } from '../utils/api';
 
 // API endpoints for shopping list operations
 const SHOPPING_API = {
-  BASE: '/api/v1/shopping',
-  LISTS: '/api/v1/shopping/lists',
-  GENERATE: '/api/v1/shopping/generate',
-  ITEMS: '/api/v1/shopping/lists/:listId/items',
+  BASE: '/api/v1/shopping-lists',
+  LISTS: '/api/v1/shopping-lists',
+  GENERATE: '/api/v1/shopping-lists/:id/generate',
+  ITEMS: '/api/v1/shopping-lists/:id/items',
+  TOGGLE: '/api/v1/shopping-lists/:id/items/:itemId/toggle',
   FILTER: '/api/v1/shopping/lists/:listId/filter'
 };
 
@@ -101,9 +102,10 @@ const ShoppingService = {
    * Generates a shopping list from selected recipes
    * Requirement: Shopping List Generation (1.2 Scope/Core Capabilities)
    */
-  async generateShoppingList(options: ShoppingListGenerationOptions): Promise<ShoppingList> {
+  async generateShoppingList(options: ShoppingListGenerationOptions, id?: string): Promise<ShoppingList> {
     try {
-      const response = await apiClient.post<ShoppingList>(SHOPPING_API.GENERATE, options);
+      const endpoint = SHOPPING_API.GENERATE.replace(':id', id ?? '');
+      const response = await apiClient.post<ShoppingList>(endpoint, options);
       return response.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
@@ -120,11 +122,10 @@ const ShoppingService = {
     data: Partial<ShoppingListItem>
   ): Promise<ShoppingListItem> {
     try {
-      const endpoint = SHOPPING_API.ITEMS.replace(':listId', listId);
-      const response = await apiClient.put<ShoppingListItem>(
-        `${endpoint}/${itemId}`, 
-        data
-      );
+      const endpoint = SHOPPING_API.TOGGLE
+        .replace(':id', listId)
+        .replace(':itemId', itemId);
+      const response = await apiClient.patch<ShoppingListItem>(endpoint, data);
       return response.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
