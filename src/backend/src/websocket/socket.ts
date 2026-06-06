@@ -1,4 +1,5 @@
 // @version socket.io ^4.5.0
+// @version @socket.io/redis-adapter ^8.3.0
 
 // HUMAN TASKS:
 // 1. Configure SSL certificates for WebSocket server in production
@@ -9,9 +10,11 @@
 // 6. Set up automatic WebSocket room cleanup intervals
 
 import { Server, Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 import { NotificationHandler } from './handlers/notification.handler';
 import { PantryWebSocketHandler } from './handlers/pantry.handler';
 import { RecipeHandler } from './handlers/recipe.handler';
+import { createRedisClient } from '../config/redis';
 import { logger } from '../utils/logger';
 
 /**
@@ -27,7 +30,6 @@ export class WebSocketServer {
     private notificationHandler: NotificationHandler;
     private pantryHandler: PantryWebSocketHandler;
     private recipeHandler: RecipeHandler;
-    private connectedClients: Map<string, Socket>;
 
     /**
      * Initializes the WebSocket server with all required handlers
@@ -47,11 +49,17 @@ export class WebSocketServer {
             maxHttpBufferSize: 1e6 // 1MB
         });
 
+        // Configure the Redis adapter for cross-instance WebSocket fan-out.
+        // Reuses the canonical createRedisClient() factory (config/redis.ts) so the
+        // adapter shares the same Redis connection configuration as the cache layer.
+        const pubClient = createRedisClient();
+        const subClient = pubClient.duplicate();
+        this.io.adapter(createAdapter(pubClient, subClient));
+
         // Initialize handlers
         this.notificationHandler = new NotificationHandler();
         this.pantryHandler = new PantryWebSocketHandler();
         this.recipeHandler = new RecipeHandler();
-        this.connectedClients = new Map<string, Socket>();
 
         logger.info('WebSocket server initialized', {
             timestamp: new Date().toISOString(),
@@ -117,9 +125,6 @@ export class WebSocketServer {
         const userId = socket.data.userId;
 
         try {
-            // Track connected client
-            this.connectedClients.set(userId, socket);
-
             // Set up handlers for the connected client
             this.notificationHandler.handleConnection(socket, userId);
             this.pantryHandler.handlePantrySync(socket, userId);
@@ -170,9 +175,6 @@ export class WebSocketServer {
         try {
             // Clean up handlers
             this.notificationHandler.handleDisconnection(userId);
-            
-            // Remove from connected clients
-            this.connectedClients.delete(userId);
 
             // Clean up socket rooms
             socket.rooms.forEach(room => {
