@@ -14,6 +14,7 @@ import { authenticate } from '../middlewares/auth.middleware';
 import { uploadMiddleware } from '../middlewares/upload.middleware';
 import { validateImageUpload } from '../validators/image.validator';
 import logger from '../../utils/logger';
+import { imageUploadLimiter } from '../middlewares/rateLimiter.middleware';
 
 /**
  * Configures and returns the Express router with secure image processing endpoints
@@ -24,15 +25,6 @@ import logger from '../../utils/logger';
  */
 const configureImageRoutes = (imageController: ImageController): Router => {
     const router = express.Router();
-
-    // Configure rate limiting for image upload endpoints
-    const uploadRateLimiter = rateLimit({
-        windowMs: 15 * 60 * 1000, // 15 minutes
-        max: 10, // Limit each IP to 10 requests per windowMs
-        message: 'Too many image uploads from this IP, please try again later',
-        standardHeaders: true,
-        legacyHeaders: false
-    });
 
     // Configure rate limiting for recognition results endpoint
     const recognitionRateLimiter = rateLimit({
@@ -60,7 +52,7 @@ const configureImageRoutes = (imageController: ImageController): Router => {
     router.post(
         '/upload',
         authenticate,
-        uploadRateLimiter,
+        imageUploadLimiter,
         validateImageUpload,
         uploadMiddleware,
         async (req, res, next) => {
