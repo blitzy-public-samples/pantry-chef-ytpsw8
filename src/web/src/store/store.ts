@@ -46,8 +46,8 @@ const persistConfig = {
   key: 'pantrychef-root',
   version: 1,
   storage,
-  whitelist: ['auth', 'inventory', 'recipe'], // Persist these reducers
-  blacklist: ['shopping'], // Don't persist shopping state
+  whitelist: ['auth', 'inventory', 'recipe', 'shopping'], // Persist these reducers
+  blacklist: [], // No reducers excluded from persistence
 };
 
 /**
