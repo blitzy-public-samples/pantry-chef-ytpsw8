@@ -68,6 +68,8 @@ ENV NODE_ENV=production \
     TZ=UTC \
     MONGODB_URI=mongodb://mongodb:27017/pantrychef \
     REDIS_URL=redis://redis:6379 \
+    REDIS_HOST=redis \
+    REDIS_PORT=6379 \
     ELASTICSEARCH_URL=http://elasticsearch:9200 \
     RABBITMQ_URL=amqp://rabbitmq:5672
 
