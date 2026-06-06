@@ -13,6 +13,8 @@ services:
       - PORT=3000
       - MONGODB_URI=mongodb://admin:secret@mongodb:27017/pantrychef
       - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - RABBITMQ_URL=amqp://admin:secret@rabbitmq:5672
       - TZ=UTC
