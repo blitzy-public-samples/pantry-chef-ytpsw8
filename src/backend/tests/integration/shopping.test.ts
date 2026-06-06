@@ -9,10 +9,13 @@
  * pattern, and nested describe/it structure) while swapping the domain to shopping.
  *
  * The System Under Test (ShoppingService) runs against REAL infrastructure: an
- * in-memory MongoDB (mongodb-memory-server) backing the real ShoppingModel, and the
- * REAL CacheService backed by Redis (never mocked). Coverage spans CRUD, the
- * cache-first read / default-TTL write-back path, generate() with pantry inventory
- * exclusion + duplicate merge, toggleItem, and user-scoping / ownership isolation.
+ * in-memory MongoDB (mongodb-memory-server) backing the real ShoppingModel + PantryModel,
+ * and the REAL CacheService backed by Redis (never mocked). Coverage spans CRUD, the
+ * cache-first read / default-TTL write-back path, RECIPE-DRIVEN generate() (ingredient
+ * aggregation + serving scaling + duplicate merge) with REAL-pantry inventory exclusion
+ * matched by ingredient id, toggleItem, and user-scoping / ownership isolation. Only the
+ * recipe + ingredient INPUT models are factory-mocked (their committed files are
+ * out-of-scope-dirty); the exclusion path they feed runs through the real PantryService.
  *
  * HUMAN TASKS:
  * 1. Provision a TEST_REDIS_URI (and discrete REDIS_HOST/REDIS_PORT/REDIS_PASSWORD/
@@ -24,10 +27,15 @@
  *    sandbox. On hosts whose system OpenSSL is 3.x (e.g. Ubuntu 23.10+), the bundled
  *    mongod 5.0 binary requires OpenSSL 1.1 — run with
  *    `LD_LIBRARY_PATH=<dir containing libcrypto.so.1.1/libssl.so.1.1>`.
- * 4. If ShoppingService.generate() changes its item-naming / inventory-matching
- *    strategy (currently it names items `Recipe <recipeId>` and matches the exclusion
- *    index against the pantry item's ingredientId), realign the seeded on-hand
- *    identifier in the generate test so exclusion stays genuinely exercised.
+ * 4. ShoppingService.generate() is RECIPE-DRIVEN: it resolves the referenced recipes
+ *    (RecipeModel) and their ingredient master records (IngredientModel) to build items,
+ *    names each item from the trusted ingredient master (never the client recipe id),
+ *    scales quantities by (targetServings / recipe.servings), merges duplicate ingredients
+ *    (by ingredient id + unit), and excludes on-hand pantry inventory matched by INGREDIENT
+ *    ID. recipe.model/ingredient.model are factory-mocked here (their real files are
+ *    out-of-scope-dirty); if the generation algorithm changes (different scaling, merge, or
+ *    exclusion keying), realign the recipe/ingredient fixtures and the seeded pantry
+ *    ingredient id below so exclusion stays genuinely exercised against the REAL PantryModel.
  * 5. Run with `--forceExit` (or add a global teardown) since the real CacheService
  *    holds an open Redis connection this suite does not close (parity with
  *    pantry.test.ts).
@@ -42,6 +50,8 @@ import { QueueService } from '../../src/services/queue.service';
 import { NotificationService } from '../../src/services/notification.service';
 import { ShoppingModel } from '../../src/models/shopping.model';
 import { PantryModel } from '../../src/models/pantry.model';
+import { RecipeModel } from '../../src/models/recipe.model';
+import { IngredientModel } from '../../src/models/ingredient.model';
 import {
   IShoppingList,
   IShoppingListItem,
@@ -73,6 +83,26 @@ jest.mock('../../src/services/queue.service', () => ({
 }));
 jest.mock('../../src/services/notification.service', () => ({
   NotificationService: jest.fn(),
+}));
+
+/**
+ * recipe.model.ts and ingredient.model.ts are factory-mocked for the SAME reason as the two
+ * services above: ShoppingService.generate() now statically imports both models (recipe-driven
+ * aggregation), and those committed model files carry pre-existing, out-of-scope Mongoose-typing
+ * errors (ObjectId-ref on a string-typed field) that ts-jest would surface at transform time —
+ * failing the suite before any assertion runs — if their real files entered the transform graph.
+ * The factories expose only the single static generate() consumes — find() — as a jest.fn(), so
+ * the recipe + ingredient INPUTS are controlled fixtures. The inventory-exclusion path those
+ * fixtures feed remains fully REAL: the seeded PantryModel is read through the actual
+ * PantryService.getPantry() -> PantryModel -> in-memory MongoDB path, so exclusion-by-ingredient-id
+ * is validated against genuinely persisted inventory (not a stub). ShoppingModel, PantryModel, and
+ * CacheService are NEVER mocked.
+ */
+jest.mock('../../src/models/recipe.model', () => ({
+  RecipeModel: { find: jest.fn() },
+}));
+jest.mock('../../src/models/ingredient.model', () => ({
+  IngredientModel: { find: jest.fn() },
 }));
 
 describe('Shopping List Integration Tests', () => {
@@ -245,63 +275,132 @@ describe('Shopping List Integration Tests', () => {
   });
 
   describe('generate', () => {
-    it('excludes on-hand pantry inventory and merges duplicates', async () => {
-      // generate() reads inventory via PantryService.getPantry(userId) when
-      // excludeInventoryItems is true. It names each candidate item `Recipe <recipeId>`
-      // and matches the exclusion index by item NAME (lowercased) against the pantry
-      // item's ingredientId (lowercased). Seed the on-hand item on `Recipe r1` with
-      // ample quantity so the merged `Recipe r1` candidate is fully covered (genuinely
-      // excluded), while the non-stocked `Recipe r2` candidate survives.
-      const onHand: PantryItem = {
-        ingredientId: 'Recipe r1',
-        quantity: 10,
-        unit: 'units',
-        location: StorageLocation.PANTRY,
-        purchaseDate: new Date(),
-        expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        notes: '',
-      };
-      // Seed a REAL pantry document so getPantry() reads it from MongoDB through the actual
-      // PantryService path (no stub). The on-hand `Recipe r1` (qty 10) fully covers the merged
-      // `Recipe r1` candidate (genuinely excluded), while `Recipe r2` (not stocked) survives.
+    // Canonical, opaque ingredient ids. Pantry exclusion and duplicate merging key on THESE ids,
+    // NEVER the display name — the seeded pantry below proves id-based (not name-based) matching.
+    const ING_FLOUR = 'ing_flour_int_01';
+    const ING_MILK = 'ing_milk_int_02';
+
+    // Trusted ingredient master records resolved by IngredientModel.find -> item name + category.
+    const ingredientMasters = [
+      { id: ING_FLOUR, name: 'Flour', category: 'Baking' },
+      { id: ING_MILK, name: 'Milk', category: 'Dairy' },
+    ];
+
+    // Two recipes resolved by RecipeModel.find. Both reference Milk in the SAME unit so, with
+    // mergeDuplicates, their serving-scaled Milk lines collapse into one. Flour is unique to r1.
+    const recipeOne = {
+      id: 'recipe_int_r1',
+      name: 'Pancakes',
+      servings: 2,
+      ingredients: [
+        { ingredientId: ING_FLOUR, quantity: 2, unit: 'cup', notes: '' },
+        { ingredientId: ING_MILK, quantity: 1, unit: 'cup', notes: '' },
+      ],
+    };
+    const recipeTwo = {
+      id: 'recipe_int_r2',
+      name: 'Smoothie',
+      servings: 2,
+      ingredients: [{ ingredientId: ING_MILK, quantity: 1, unit: 'cup', notes: '' }],
+    };
+
+    it('aggregates recipe ingredients, propagates recipe metadata, and excludes pantry inventory by ingredient id', async () => {
+      // Resolve the recipe + ingredient master fixtures through the (factory-mocked) models.
+      (RecipeModel.find as jest.Mock).mockResolvedValue([recipeOne, recipeTwo]);
+      (IngredientModel.find as jest.Mock).mockResolvedValue(ingredientMasters);
+
+      // Seed a REAL pantry document (in-memory MongoDB) holding ample Milk on hand, keyed by the
+      // canonical INGREDIENT ID (ING_MILK) — NOT a display name. getPantry() reads this through
+      // the genuine PantryService -> PantryModel path, so exclusion runs against real inventory.
       await PantryModel.create({
         userId: testUserId,
         name: 'Test Pantry',
-        items: [onHand],
+        items: [
+          {
+            ingredientId: ING_MILK,
+            quantity: 100,
+            unit: 'cup',
+            location: StorageLocation.PANTRY,
+            purchaseDate: new Date(),
+            expirationDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            notes: '',
+          } as PantryItem,
+        ],
         locations: Object.values(StorageLocation),
       });
 
-      // Spy on the REAL getPantry to assert it is consulted, while it still runs for real
-      // (jest.spyOn calls through by default, so the seeded pantry is actually read).
+      // Spy on the REAL getPantry to assert it is consulted (jest.spyOn calls through by default,
+      // so the seeded pantry is actually read from MongoDB).
       const getPantrySpy = jest.spyOn(pantryService, 'getPantry');
 
       const options: IShoppingListGenerationOptions = {
-        recipeIds: ['r1', 'r1', 'r2'],
-        servings: 2,
+        recipeIds: [recipeOne.id, recipeTwo.id],
+        servings: 2, // equal to each recipe's base servings -> scale 1
         excludeInventoryItems: true,
         mergeDuplicates: true,
       };
       const generated = await shoppingService.generate(testUserId, options);
 
-      // The result is a valid, user-scoped, persisted list echoing the options.
+      // A valid, user-scoped, persisted list echoing the options.
       expect(generated).toBeDefined();
       expect(generated.userId).toBe(testUserId);
       expect(Array.isArray(generated.items)).toBe(true);
       expect(generated.generationOptions?.excludeInventoryItems).toBe(true);
       expect(generated.generationOptions?.mergeDuplicates).toBe(true);
 
-      // generate() consulted the REAL pantry service (and thus the seeded PantryModel) for
-      // inventory exclusion.
+      // The REAL pantry service (and thus the seeded PantryModel) was consulted for exclusion.
       expect(getPantrySpy).toHaveBeenCalledWith(testUserId);
 
-      // Genuine exclusion: the fully on-hand `Recipe r1` candidate is dropped, while
-      // the non-stocked `Recipe r2` candidate survives.
-      expect(generated.items.some((item) => item.name === 'Recipe r1')).toBe(false);
-      expect(generated.items.some((item) => item.name === 'Recipe r2')).toBe(true);
+      // Items are sourced from the trusted ingredient MASTER names — never 'Recipe <id>' and never
+      // a client-supplied recipe/ingredient id (recipe-driven generation; CWE-20/79 closed).
+      for (const item of generated.items) {
+        expect(item.name.startsWith('Recipe ')).toBe(false);
+        expect(item.name).not.toBe(recipeOne.id);
+        expect(item.name).not.toBe(recipeTwo.id);
+      }
 
-      // Resilient reduction: exclusion + merge can only reduce the candidate set,
-      // never inflate it beyond the requested recipe count.
-      expect(generated.items.length).toBeLessThanOrEqual(options.recipeIds.length);
+      // EXCLUSION by ingredient id: Milk is fully covered by the 100-cup on-hand pantry entry
+      // (matched on ING_MILK), so it is dropped; Flour (not stocked) survives with its name.
+      const names = generated.items.map((item) => item.name);
+      expect(names).toContain('Flour');
+      expect(names).not.toContain('Milk');
+
+      // The surviving Flour line carries the originating recipe metadata (recipe-driven) and the
+      // trusted master category — proving items come from recipe ingredients, not client echoes.
+      const flour = generated.items.find((item) => item.name === 'Flour');
+      expect(flour?.recipeId).toBe(recipeOne.id);
+      expect(flour?.recipeName).toBe('Pancakes');
+      expect(flour?.category).toBe('Baking');
+    });
+
+    it('keeps all recipe-derived items (serving-scaled) when no pantry inventory matches', async () => {
+      // Single recipe; no pantry seeded -> getPantry rejects 404 -> generate() treats it as "no
+      // inventory to exclude" and keeps every recipe-derived item.
+      (RecipeModel.find as jest.Mock).mockResolvedValue([recipeOne]);
+      (IngredientModel.find as jest.Mock).mockResolvedValue(ingredientMasters);
+
+      // Use a DISTINCT user id so the prior test's cached pantry cannot leak in. CacheService.clear
+      // (used by beforeEach) cannot purge keys written under the client's NODE_ENV keyPrefix, so a
+      // shared user id would let the earlier seeded pantry survive in cache and wrongly exclude
+      // Milk here. A unique user guarantees getPantry hits a genuine 404 (no pantry) for this spec.
+      const noPantryUserId = 'shopping-gen-no-pantry-user';
+
+      const options: IShoppingListGenerationOptions = {
+        recipeIds: [recipeOne.id],
+        servings: 4, // scale 2 over recipeOne's base servings of 2
+        excludeInventoryItems: true,
+        mergeDuplicates: false,
+      };
+      const generated = await shoppingService.generate(noPantryUserId, options);
+
+      // Both recipe ingredients survive (nothing on hand), with serving-scaled quantities.
+      const flour = generated.items.find((item) => item.name === 'Flour');
+      const milk = generated.items.find((item) => item.name === 'Milk');
+      expect(flour).toBeDefined();
+      expect(milk).toBeDefined();
+      expect(flour?.quantity).toBe(4); // 2 * (4 / 2)
+      expect(milk?.quantity).toBe(2); // 1 * (4 / 2)
+      expect(flour?.recipeName).toBe('Pancakes');
     });
   });
 

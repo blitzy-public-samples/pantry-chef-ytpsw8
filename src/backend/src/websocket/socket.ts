@@ -14,6 +14,12 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { NotificationHandler } from './handlers/notification.handler';
 import { PantryWebSocketHandler } from './handlers/pantry.handler';
 import { RecipeHandler } from './handlers/recipe.handler';
+import { NotificationService } from '../services/notification.service';
+import { PantryService } from '../services/pantry.service';
+import { RecipeService } from '../services/recipe.service';
+import { CacheService } from '../services/cache.service';
+import { QueueService } from '../services/queue.service';
+import { SearchService } from '../services/search.service';
 import { createRedisClient } from '../config/redis';
 import { logger } from '../utils/logger';
 
@@ -56,10 +62,30 @@ export class WebSocketServer {
         const subClient = pubClient.duplicate();
         this.io.adapter(createAdapter(pubClient, subClient));
 
-        // Initialize handlers
-        this.notificationHandler = new NotificationHandler();
-        this.pantryHandler = new PantryWebSocketHandler();
-        this.recipeHandler = new RecipeHandler();
+        // Construct the service dependencies each handler requires, then wire them
+        // into the handlers. The previous no-argument `new XHandler()` calls did not
+        // satisfy the handlers' required constructor parameters (TS2554) and would
+        // have thrown at runtime (RecipeHandler rejects a missing RecipeService), so
+        // the WebSocket server — and therefore the Redis adapter fan-out — could
+        // never actually initialize.
+        //
+        // The services are constructed explicitly rather than resolved through the
+        // tsyringe container because the dependency graph is mixed: RecipeService is
+        // not decorated with `@injectable()` (so the container cannot resolve its
+        // dependencies), and NotificationService requires the live Socket.IO `Server`
+        // instance (`this.io`) that only exists here. CacheService, QueueService, and
+        // SearchService have no-argument / default-argument constructors.
+        const cacheService = new CacheService();
+        const queueService = new QueueService();
+        const searchService = new SearchService();
+        const notificationService = new NotificationService(this.io);
+        const pantryService = new PantryService(cacheService, queueService, notificationService);
+        const recipeService = new RecipeService(searchService, cacheService, queueService);
+
+        // Initialize handlers with their resolved service dependencies.
+        this.notificationHandler = new NotificationHandler(notificationService);
+        this.pantryHandler = new PantryWebSocketHandler(pantryService);
+        this.recipeHandler = new RecipeHandler(recipeService);
 
         logger.info('WebSocket server initialized', {
             timestamp: new Date().toISOString(),

@@ -184,24 +184,31 @@ export const updateShoppingListValidation = [
 ];
 
 // Requirement: Shopping List Generation - Generate shopping list validation
-// Validates the recipe-driven generation request. At least one recipe ID is required;
-// each element is validated as a non-empty string (NOT as a Mongo ObjectId, since the
-// controller resolves recipes by their domain identifiers). `servings` must be a
-// positive integer. The boolean toggles are optional because the service defaults them.
+// Validates the recipe-driven generation request. `recipeIds` must be a non-empty,
+// size-capped array of well-formed MongoDB ObjectIds: generation loads the referenced
+// recipes via `RecipeModel` (an ObjectId lookup) and aggregates their trusted
+// ingredients, so each id is constrained to the strict 24-hex ObjectId format and
+// HTML-escaped before the check. This closes the stored-data / stored-XSS vector
+// (CWE-20/CWE-79) where an unconstrained client id could previously reach persistence,
+// and the array is capped so one request cannot fan out into an unbounded
+// recipe/ingredient query (R10 performance budget). `servings` must be a positive,
+// bounded integer. The boolean toggles are optional because the service defaults them.
 export const generateShoppingListValidation = [
-  body('recipeIds').isArray({ min: 1 }).withMessage('At least one recipe ID is required'),
+  body('recipeIds')
+    .isArray({ min: 1, max: 50 })
+    .withMessage('recipeIds must be an array of 1 to 50 recipe IDs'),
 
   body('recipeIds.*')
     .isString()
     .withMessage('Each recipe ID must be a string')
     .bail()
     .trim()
-    .notEmpty()
-    .withMessage('Recipe ID cannot be empty'),
+    .custom(validateObjectId)
+    .withMessage('Each recipe ID must be a valid MongoDB ObjectId'),
 
   body('servings')
-    .isInt({ min: 1 })
-    .withMessage('Servings must be an integer greater than or equal to 1'),
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Servings must be an integer between 1 and 100'),
 
   body('excludeInventoryItems')
     .optional()

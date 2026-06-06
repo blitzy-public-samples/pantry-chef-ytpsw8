@@ -40,19 +40,21 @@ let secondUserId: string;
 let testListId: string;
 let testItemId: string;
 
-// Router is mounted at /api/v1/shopping-lists. Per the authoritative web/API
-// contract (src/web/src/services/shopping.service.ts), the GET list handler is
-// registered at the router root, so the effective list path is the SINGLE-segment
-// /api/v1/shopping-lists. There is intentionally NO GET-by-id route — ownership
-// isolation is exercised through PUT / DELETE / PATCH(toggle) instead.
+// Router is mounted at /api/v1/shopping-lists. The authoritative six-route contract
+// (R4) registers the collection GET at the router-relative sub-path '/shopping-lists',
+// so the INTENTIONAL effective list path is the DOUBLED segment
+// /api/v1/shopping-lists/shopping-lists. Create/update/delete/generate/toggle use the
+// single-segment BASE. There is intentionally NO GET-by-id route — ownership isolation
+// is exercised through PUT / DELETE / PATCH(toggle) instead.
 const BASE = '/api/v1/shopping-lists';
-const LIST_PATH = BASE; // authoritative single-segment list path
+const LIST_PATH = `${BASE}/shopping-lists`; // intentional doubled-segment collection GET path
 
-// IDs serialize as `_id` (the shopping model uses { timestamps: true } with no
-// toJSON virtual/transform), so the Mongoose `id` virtual is not present in JSON.
-// Capture `id || _id` for both lists and embedded item subdocuments.
-const extractId = (obj: any): string =>
-  obj && (obj.id || obj._id) ? String(obj.id || obj._id) : '';
+// The shopping model's toJSON/toObject transform emits the canonical string `id`
+// (mapping Mongo `_id` -> `id` and stripping `_id`/`__v`), so both lists and embedded
+// item subdocuments expose `id`. This helper requires that canonical `id` and does NOT
+// fall back to `_id`, so a regression in the serialization transform surfaces as an
+// empty id (failing the specs) rather than being silently masked.
+const extractId = (obj: any): string => (obj && obj.id ? String(obj.id) : '');
 
 // Builds a create payload that satisfies createShoppingListValidation:
 // `name` is 1–100 chars; each item has a non-empty `name` and a float `quantity` >= 0.
@@ -64,12 +66,15 @@ const buildListPayload = (overrides: Record<string, any> = {}) => ({
   ...overrides,
 });
 
-// Satisfies generateShoppingListValidation: `recipeIds` is a non-empty string array,
-// `servings` is an integer >= 1, and the booleans are optional. `excludeInventoryItems`
-// is kept false so generate() does not require pantry data; generate derives items
-// from `recipeIds` alone (no recipe seeding required).
+// Satisfies the hardened generateShoppingListValidation: `recipeIds` is a non-empty
+// array (max 50) of well-formed MongoDB ObjectId strings (the validator now rejects
+// non-ObjectId ids), `servings` is an integer in [1, 100], and the booleans are
+// optional. `excludeInventoryItems` is kept false so generate() does not require
+// pantry data. No recipes are seeded, so generation resolves zero recipes and creates
+// a list with zero items — still a 201 (generation only includes items sourced from
+// recipes that actually resolve, never client-echoed ids).
 const generateOptions = {
-  recipeIds: ['recipe-1'],
+  recipeIds: [new mongoose.Types.ObjectId().toString()],
   servings: 2,
   excludeInventoryItems: false,
   mergeDuplicates: true,
@@ -152,7 +157,7 @@ beforeEach(async () => {
 // ---------------------------------------------------------------------------
 describe('Shopping List API (e2e)', () => {
   describe('POST /api/v1/shopping-lists/ (create)', () => {
-    it('creates a list → 201 + unified envelope', async () => {
+    it('creates a list → 201 + unified envelope with canonical `id` (no `_id`/`__v`)', async () => {
       const res = await request(configuredApp)
         .post(`${BASE}/`)
         .set('Authorization', `Bearer ${authToken}`)
@@ -161,6 +166,16 @@ describe('Shopping List API (e2e)', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data).toBeDefined();
       expect(res.body.metadata).toBeDefined();
+      // Cross-platform ID contract (R8): API JSON MUST expose the canonical string
+      // `id` and MUST NOT leak the Mongo `_id`/`__v` — for the list AND its embedded
+      // items. These assertions catch any regression of the model toJSON/toObject
+      // transform rather than tolerating `_id` as the prior helper did.
+      expect(res.body.data.id).toBeTruthy();
+      expect(res.body.data._id).toBeUndefined();
+      expect(res.body.data.__v).toBeUndefined();
+      expect(Array.isArray(res.body.data.items)).toBe(true);
+      expect(res.body.data.items[0].id).toBeTruthy();
+      expect(res.body.data.items[0]._id).toBeUndefined();
       expect(extractId(res.body.data)).toBeTruthy();
     });
 

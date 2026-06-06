@@ -19,14 +19,22 @@ import {
 } from '../interfaces/shopping.interface';
 import { apiClient, handleApiError } from '../utils/api';
 
-// API endpoints for shopping list operations
+// API endpoints for shopping list operations.
+// These mirror the authoritative six-route backend contract exactly (R4/R8):
+// the create/update/delete operations target the mount base, while the collection
+// GET targets the intentional doubled segment the backend registers (see LISTS).
 const SHOPPING_API = {
+  // Mount base — create (POST /), update (PUT /:id), delete (DELETE /:id):
+  // effective /api/v1/shopping-lists and /api/v1/shopping-lists/:id.
   BASE: '/api/v1/shopping-lists',
-  LISTS: '/api/v1/shopping-lists',
+  // Collection GET is the INTENTIONAL doubled segment: the backend registers the
+  // router-relative GET at '/shopping-lists' under the '/api/v1/shopping-lists'
+  // mount, so the effective list URL is /api/v1/shopping-lists/shopping-lists.
+  // Used ONLY by getShoppingLists(); every other operation uses BASE.
+  LISTS: '/api/v1/shopping-lists/shopping-lists',
   GENERATE: '/api/v1/shopping-lists/:id/generate',
   ITEMS: '/api/v1/shopping-lists/:id/items',
-  TOGGLE: '/api/v1/shopping-lists/:id/items/:itemId/toggle',
-  FILTER: '/api/v1/shopping/lists/:listId/filter'
+  TOGGLE: '/api/v1/shopping-lists/:id/items/:itemId/toggle'
 };
 
 /**
@@ -88,7 +96,8 @@ const ShoppingService = {
    */
   async createShoppingList(data: Partial<ShoppingList>): Promise<ShoppingList> {
     try {
-      const response = await apiClient.post<ApiEnvelope<ShoppingList>>(SHOPPING_API.LISTS, data);
+      // POST / -> the mount base (NOT the doubled GET collection path).
+      const response = await apiClient.post<ApiEnvelope<ShoppingList>>(SHOPPING_API.BASE, data);
       return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
@@ -101,7 +110,8 @@ const ShoppingService = {
    */
   async updateShoppingList(id: string, data: Partial<ShoppingList>): Promise<ShoppingList> {
     try {
-      const response = await apiClient.put<ApiEnvelope<ShoppingList>>(`${SHOPPING_API.LISTS}/${id}`, data);
+      // PUT /:id -> the mount base + id (NOT the doubled GET collection path).
+      const response = await apiClient.put<ApiEnvelope<ShoppingList>>(`${SHOPPING_API.BASE}/${id}`, data);
       return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
@@ -114,7 +124,8 @@ const ShoppingService = {
    */
   async deleteShoppingList(id: string): Promise<void> {
     try {
-      await apiClient.delete(`${SHOPPING_API.LISTS}/${id}`);
+      // DELETE /:id -> the mount base + id (NOT the doubled GET collection path).
+      await apiClient.delete(`${SHOPPING_API.BASE}/${id}`);
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
@@ -171,27 +182,49 @@ const ShoppingService = {
   },
 
   /**
-   * Filters shopping list items based on criteria
+   * Filters a shopping list's items by the supplied criteria.
    * Requirement: Simplified Grocery Shopping (1.2 Scope/Key Benefits)
+   *
+   * Filtering is performed CLIENT-SIDE: the authoritative six-route backend contract
+   * exposes no filter endpoint (the prior `/api/v1/shopping/lists/:listId/filter`
+   * route was never implemented and would hit a dead endpoint). The list is fetched
+   * via `getShoppingList(listId)` — itself contract-compliant, sourcing from the
+   * collection GET — and its embedded items are filtered in memory. The method
+   * signature and `ShoppingListItem[]` return type are unchanged, so the
+   * `useShoppingList` hook (`filterItems`) keeps working without modification.
+   *
+   * Filter semantics:
+   * - `categories`: when non-empty, keep items whose `category` is in the set.
+   * - `searchTerm`: when non-empty, keep items whose `name` contains it (case-insensitive).
+   * - `showCheckedItems`: when false, drop checked-off items.
+   * - `recipeId`: when non-empty, keep items originating from that recipe.
    */
   async filterShoppingList(
-    listId: string, 
+    listId: string,
     filter: ShoppingListFilter
   ): Promise<ShoppingListItem[]> {
-    try {
-      const endpoint = SHOPPING_API.FILTER.replace(':listId', listId);
-      const response = await apiClient.get<ShoppingListItem[]>(endpoint, {
-        params: {
-          categories: filter.categories.join(','),
-          searchTerm: filter.searchTerm,
-          showCheckedItems: filter.showCheckedItems,
-          recipeId: filter.recipeId
-        }
-      });
-      return response.data;
-    } catch (error) {
-      throw handleApiError(error as AxiosError);
-    }
+    // getShoppingList already unwraps the unified envelope, maps transport errors,
+    // and throws a not-found error for an unknown id, so no extra try/catch is needed.
+    const list = await ShoppingService.getShoppingList(listId);
+
+    const searchTerm = filter.searchTerm.trim().toLowerCase();
+    const hasCategoryFilter = filter.categories.length > 0;
+
+    return list.items.filter((item) => {
+      if (hasCategoryFilter && !filter.categories.includes(item.category)) {
+        return false;
+      }
+      if (searchTerm.length > 0 && !item.name.toLowerCase().includes(searchTerm)) {
+        return false;
+      }
+      if (!filter.showCheckedItems && item.checked) {
+        return false;
+      }
+      if (filter.recipeId.length > 0 && item.recipeId !== filter.recipeId) {
+        return false;
+      }
+      return true;
+    });
   }
 };
 

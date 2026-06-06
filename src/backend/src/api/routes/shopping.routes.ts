@@ -63,12 +63,14 @@ router.use((req: Request, res: Response, next: NextFunction): void => {
  * must not surface a floating/misused promise to Express's void-returning handler contract.
  */
 
-// GET /api/v1/shopping-lists — list the authenticated user's shopping lists.
-// Router-relative path is '/' (the collection root); the resource segment lives in the
-// mount point in routes/index.ts, so the effective URL is GET /api/v1/shopping-lists.
-// This single-segment path matches the web service and e2e/iOS clients (R4/R8 contract).
+// GET /api/v1/shopping-lists/shopping-lists — list the authenticated user's shopping lists.
+// The user-specified route contract defines the collection GET at the router-relative
+// sub-path '/shopping-lists' (verbatim, R4). Because routes/index.ts mounts this router at
+// '/api/v1/shopping-lists', the intentional effective URL is the DOUBLED segment
+// GET /api/v1/shopping-lists/shopping-lists. The web service, the e2e suite, and the iOS
+// client all target this exact doubled path so cross-device sync stays contract-consistent (R8).
 router.get(
-  '/',
+  '/shopping-lists',
   (req: Request, res: Response, next: NextFunction) =>
     void shoppingController.getLists(req, res, next)
 );

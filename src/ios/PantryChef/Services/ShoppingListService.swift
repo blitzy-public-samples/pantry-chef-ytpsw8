@@ -134,7 +134,13 @@ public final class ShoppingListService {
     // MARK: - CRUD & Generation (Routes 1-5 via NetworkService)
 
     /// Fetches every shopping list owned by the authenticated user.
-    /// Route 1 — `GET /shopping-lists` → unified envelope wrapping `[ShoppingList]`.
+    /// Route 1 — collection GET. The backend registers the router-relative GET at
+    /// `/shopping-lists` under the `/api/v1/shopping-lists` mount, so the INTENTIONAL
+    /// effective URL is the doubled segment `/api/v1/shopping-lists/shopping-lists`.
+    /// `NetworkService` prepends the `/api/v1` base, so the request path below is the
+    /// router-relative `/shopping-lists/shopping-lists`. This is the ONLY route that
+    /// uses the doubled segment; create/update/delete/generate/toggle use the single
+    /// `/shopping-lists` base (R4/R8 cross-platform contract).
     ///
     /// `NetworkService` injects the `Authorization: Bearer <token>` header and
     /// applies the shared decoder strategy automatically; the envelope is unwrapped
@@ -142,7 +148,7 @@ public final class ShoppingListService {
     /// - Returns: Publisher emitting the user's shopping lists or a typed error.
     public func getLists() -> AnyPublisher<[ShoppingList], ShoppingListServiceError> {
         let publisher: AnyPublisher<ApiEnvelope<[ShoppingList]>, NetworkError> =
-            NetworkService.shared.request("/shopping-lists", method: .get)
+            NetworkService.shared.request("/shopping-lists/shopping-lists", method: .get)
         return publisher
             .map { $0.data }
             .mapError { _ in ShoppingListServiceError.networkError }

@@ -6,13 +6,16 @@
  *    covers the `shopping:` keyspace used by this service.
  * 2. Verify the iOS `isPurchased` <-> `checked` field mapping is reconciled in the iOS
  *    serialization layer so cross-device sync payloads remain contract-consistent.
- * 3. Confirm pantry category/identifier alignment (pantry items key on `ingredientId`,
- *    shopping items key on `name`) so the inventory-exclusion match in `generate()` is
- *    accurate for the deployment's ingredient taxonomy.
+ * 3. Confirm pantry/recipe identifier alignment: both recipe ingredient lines and
+ *    pantry items key on the canonical `ingredientId`, which `generate()` uses for
+ *    duplicate merging and inventory exclusion. Verify the ingredient master
+ *    collection is seeded so referenced ingredient ids resolve to name/category.
  */
 
 import { injectable } from 'tsyringe';
 import { ShoppingModel } from '../models/shopping.model';
+import { RecipeModel } from '../models/recipe.model';
+import { IngredientModel } from '../models/ingredient.model';
 import { CacheService } from './cache.service';
 import { PantryService } from './pantry.service';
 import {
@@ -35,6 +38,20 @@ const DEFAULT_PAGE_SIZE = 50;
  * defeat the pagination cap by passing an arbitrarily large `limit`.
  */
 const MAX_PAGE_SIZE = 100;
+
+/**
+ * Internal pairing of a generated shopping-list item with the canonical ingredient
+ * id it was sourced from.
+ *
+ * The ingredient key (never the human-readable display name) is the identity used
+ * for duplicate merging and pantry inventory exclusion, so both operations stay
+ * accurate regardless of how an ingredient is named. The key is carried alongside
+ * the item only during generation and is not persisted.
+ */
+interface GenerationCandidate {
+  ingredientKey: string;
+  item: IShoppingListItem;
+}
 
 /**
  * Service layer for the server-authoritative shopping-list domain (Feature 1 —
@@ -288,16 +305,26 @@ export class ShoppingService {
   }
 
   /**
-   * Generates a shopping list for a user from recipe-generation options.
+   * Generates a shopping list for a user by aggregating the ingredients of the
+   * referenced recipes.
    *
-   * Candidate items are derived from `options.recipeIds` alone (no recipe service
-   * is injected): one item is produced per recipe id, with its quantity scaled by
-   * `options.servings` and the originating `recipeId` carried through. When
-   * `options.mergeDuplicates` is true, duplicate items are merged by summing their
-   * quantities. When `options.excludeInventoryItems` is true, the user's pantry is
-   * read via `PantryService.getPantry` and matching on-hand quantities are
-   * subtracted from the candidates (best-effort match). The generation options are
-   * echoed onto the persisted list, and the per-user cache is invalidated.
+   * The referenced recipes (`options.recipeIds`) are loaded from the trusted
+   * `RecipeModel`, and their ingredient lines are resolved against the
+   * `IngredientModel` master collection to obtain each ingredient's real name and
+   * category. For every recipe ingredient, a candidate item is produced with its
+   * quantity scaled by the ratio of the requested `options.servings` to the
+   * recipe's base servings, carrying the originating `recipeId`/`recipeName`. A
+   * referenced id that does not resolve to a trusted recipe/ingredient record is
+   * skipped (and logged) rather than echoed into a persisted item name — this both
+   * keeps generation recipe-driven and prevents client-controlled identifiers from
+   * being stored as item content (CWE-20/CWE-79).
+   *
+   * When `options.mergeDuplicates` is true, candidates sharing an ingredient id and
+   * unit are merged by summing quantities. When `options.excludeInventoryItems` is
+   * true, the user's pantry is read via `PantryService.getPantry` and matching
+   * on-hand quantities (matched by ingredient id) are subtracted from the
+   * candidates. The generation options are echoed onto the persisted list, and the
+   * per-user cache is invalidated.
    *
    * Addresses requirement: Shopping List Generation - Recipe-driven, customizable
    * list generation with pantry inventory exclusion.
@@ -307,48 +334,106 @@ export class ShoppingService {
     options: IShoppingListGenerationOptions
   ): Promise<IShoppingList> {
     try {
-      // Derive candidate items from the generation options alone. There is no
-      // recipe service or recipe model available here, so each requested recipe id
-      // contributes a single quantity-scaled placeholder item carrying its
-      // recipe association. Mongoose assigns the authoritative subdocument `_id`
-      // on persistence; the generated `id` below only satisfies the typed shape.
+      // Recipe-driven generation: candidate items are derived from the TRUSTED
+      // recipe and ingredient records referenced by `options.recipeIds`, never from
+      // the client-supplied ids themselves. This is what makes the result a real
+      // recipe-sourced shopping list (AAP F1 generation) and simultaneously closes
+      // the stored-data/XSS vector (CWE-20/CWE-79): an unresolvable client id is
+      // skipped and logged rather than echoed into a persisted item name.
       const recipeIds = Array.isArray(options.recipeIds) ? options.recipeIds : [];
-      const servings = options.servings > 0 ? options.servings : 1;
+      const targetServings = options.servings > 0 ? options.servings : 1;
 
-      let candidateItems: IShoppingListItem[] = recipeIds.map(
-        (recipeId, index): IShoppingListItem => ({
-          id: this.buildGeneratedItemId(index),
-          name: `Recipe ${recipeId}`,
-          quantity: servings,
-          unit: '',
-          category: '',
-          checked: false,
-          notes: '',
-          recipeId,
-          recipeName: '',
-        })
-      );
+      // Load the referenced recipes in a single bounded query (R10 budget). With no
+      // recipe ids there is nothing to aggregate.
+      const recipes =
+        recipeIds.length > 0 ? await RecipeModel.find({ _id: { $in: recipeIds } }) : [];
 
-      // Optionally merge duplicate items (same identity) by summing quantities.
-      if (options.mergeDuplicates === true) {
-        candidateItems = this.mergeDuplicateItems(candidateItems);
+      // Collect every distinct ingredient id referenced across all recipes so the
+      // ingredient master records can be resolved in one follow-up query.
+      const ingredientIdSet = new Set<string>();
+      for (const recipe of recipes) {
+        for (const recipeIngredient of recipe.ingredients) {
+          ingredientIdSet.add(String(recipeIngredient.ingredientId));
+        }
       }
 
-      // Optionally subtract on-hand pantry inventory from the candidate items.
-      // getPantry is invoked ONLY within this branch.
+      // Resolve ingredient master records -> trusted name + category, keyed by id.
+      // A Map (not a plain object) is used so dynamic id keys cannot raise
+      // object-injection / prototype-pollution concerns.
+      const ingredientMaster = new Map<string, { name: string; category: string }>();
+      if (ingredientIdSet.size > 0) {
+        const ingredientDocs = await IngredientModel.find({
+          _id: { $in: Array.from(ingredientIdSet) },
+        });
+        for (const ingredientDoc of ingredientDocs) {
+          ingredientMaster.set(String(ingredientDoc.id), {
+            name: ingredientDoc.name,
+            category: String(ingredientDoc.category),
+          });
+        }
+      }
+
+      // Build scaled candidates from recipe ingredient lines, carrying each item's
+      // originating recipe association. Quantities are scaled by the ratio of the
+      // requested servings to the recipe's base servings.
+      let candidates: GenerationCandidate[] = [];
+      for (const recipe of recipes) {
+        const baseServings = recipe.servings > 0 ? recipe.servings : 1;
+        const scale = targetServings / baseServings;
+        for (const recipeIngredient of recipe.ingredients) {
+          const ingredientKey = String(recipeIngredient.ingredientId);
+          const master = ingredientMaster.get(ingredientKey);
+          if (master === undefined) {
+            // No trusted ingredient record resolved for this reference: skip it
+            // rather than echoing an unverified id into a persisted item name.
+            logger.warn('Skipping recipe ingredient with no resolvable master record', {
+              userId,
+              recipeId: String(recipe.id),
+              ingredientId: ingredientKey,
+              timestamp: new Date().toISOString(),
+            });
+            continue;
+          }
+
+          candidates.push({
+            ingredientKey,
+            item: {
+              id: this.buildGeneratedItemId(candidates.length),
+              name: master.name,
+              quantity: recipeIngredient.quantity * scale,
+              unit: recipeIngredient.unit,
+              category: master.category,
+              checked: false,
+              notes: '',
+              recipeId: String(recipe.id),
+              recipeName: recipe.name,
+            },
+          });
+        }
+      }
+
+      // Optionally merge duplicate ingredients (same ingredient + unit) by summing
+      // quantities, so the same item sourced from multiple recipes appears once.
+      if (options.mergeDuplicates === true) {
+        candidates = this.mergeDuplicateCandidates(candidates);
+      }
+
+      // Optionally subtract on-hand pantry inventory. Matching is by the canonical
+      // ingredient id (NOT display name), so exclusion is accurate regardless of
+      // naming. getPantry is invoked ONLY within this branch.
       if (options.excludeInventoryItems === true) {
         try {
           const pantry = await this.pantryService.getPantry(userId);
 
-          // Build an on-hand index keyed by normalized ingredient identifier.
+          // Build an on-hand index keyed by ingredient id.
           const onHand = new Map<string, number>();
           for (const pantryItem of pantry.items) {
-            const indexKey = pantryItem.ingredientId.trim().toLowerCase();
-            const current = onHand.get(indexKey) ?? 0;
-            onHand.set(indexKey, current + pantryItem.quantity);
+            const pantryKey = String(pantryItem.ingredientId);
+            const current = onHand.get(pantryKey) ?? 0;
+            onHand.set(pantryKey, current + pantryItem.quantity);
           }
 
-          candidateItems = this.applyInventoryExclusion(candidateItems, onHand);
+          candidates = this.applyInventoryExclusion(candidates, onHand);
         } catch (pantryError) {
           // A user without a provisioned pantry should still be able to generate
           // a list: treat a missing pantry (404) as "no inventory to exclude"
@@ -366,6 +451,11 @@ export class ShoppingService {
           }
         }
       }
+
+      // Project the candidates down to the persisted item shape.
+      const candidateItems: IShoppingListItem[] = candidates.map(
+        (candidate): IShoppingListItem => candidate.item
+      );
 
       // Persist the generated list, echoing the options into generationOptions.
       const list = await ShoppingModel.create({
@@ -462,23 +552,31 @@ export class ShoppingService {
   }
 
   /**
-   * Merges duplicate items by summing their quantities.
+   * Merges duplicate candidates by summing their quantities.
    *
-   * Item identity is the normalized combination of `name` and `unit`. The first
-   * occurrence's non-quantity fields are preserved.
+   * Candidate identity is the canonical ingredient id combined with the normalized
+   * unit, so the same ingredient sourced from multiple recipes (in the same unit)
+   * collapses into a single line. The first occurrence's non-quantity fields
+   * (including its originating recipe association) are preserved.
    */
-  private mergeDuplicateItems(items: IShoppingListItem[]): IShoppingListItem[] {
-    const merged = new Map<string, IShoppingListItem>();
-    for (const item of items) {
-      const mergeKey = `${item.name.trim().toLowerCase()}::${item.unit.trim().toLowerCase()}`;
+  private mergeDuplicateCandidates(candidates: GenerationCandidate[]): GenerationCandidate[] {
+    const merged = new Map<string, GenerationCandidate>();
+    for (const candidate of candidates) {
+      const mergeKey = `${candidate.ingredientKey}::${candidate.item.unit.trim().toLowerCase()}`;
       const existing = merged.get(mergeKey);
       if (existing) {
         merged.set(mergeKey, {
           ...existing,
-          quantity: existing.quantity + item.quantity,
+          item: {
+            ...existing.item,
+            quantity: existing.item.quantity + candidate.item.quantity,
+          },
         });
       } else {
-        merged.set(mergeKey, { ...item });
+        merged.set(mergeKey, {
+          ingredientKey: candidate.ingredientKey,
+          item: { ...candidate.item },
+        });
       }
     }
 
@@ -486,36 +584,39 @@ export class ShoppingService {
   }
 
   /**
-   * Subtracts on-hand pantry inventory from candidate items (best-effort).
+   * Subtracts on-hand pantry inventory from candidates (best-effort).
    *
-   * Candidate items are matched against the on-hand index by normalized `name`.
-   * The matched on-hand quantity is consumed: if it fully covers a candidate the
-   * item is dropped, otherwise the remaining quantity is retained. The on-hand
-   * index is decremented as quantities are consumed so duplicate candidates do not
-   * each subtract the full on-hand amount.
+   * Candidates are matched against the on-hand index by canonical ingredient id
+   * (the same identifier pantry items are keyed on), so exclusion is accurate
+   * regardless of ingredient naming. The matched on-hand quantity is consumed: if
+   * it fully covers a candidate the item is dropped, otherwise the remaining
+   * quantity is retained. The on-hand index is decremented as quantities are
+   * consumed so duplicate candidates do not each subtract the full on-hand amount.
    */
   private applyInventoryExclusion(
-    items: IShoppingListItem[],
+    candidates: GenerationCandidate[],
     onHand: Map<string, number>
-  ): IShoppingListItem[] {
-    const result: IShoppingListItem[] = [];
-    for (const item of items) {
-      const lookupKey = item.name.trim().toLowerCase();
-      const available = onHand.get(lookupKey) ?? 0;
+  ): GenerationCandidate[] {
+    const result: GenerationCandidate[] = [];
+    for (const candidate of candidates) {
+      const available = onHand.get(candidate.ingredientKey) ?? 0;
 
       if (available <= 0) {
-        // Nothing on hand for this item: keep the full candidate quantity.
-        result.push(item);
+        // Nothing on hand for this ingredient: keep the full candidate quantity.
+        result.push(candidate);
         continue;
       }
 
-      const consumed = available >= item.quantity ? item.quantity : available;
-      onHand.set(lookupKey, available - consumed);
+      const consumed = available >= candidate.item.quantity ? candidate.item.quantity : available;
+      onHand.set(candidate.ingredientKey, available - consumed);
 
-      const remaining = item.quantity - consumed;
+      const remaining = candidate.item.quantity - consumed;
       if (remaining > 0) {
         // Partially covered by inventory: retain the outstanding quantity.
-        result.push({ ...item, quantity: remaining });
+        result.push({
+          ...candidate,
+          item: { ...candidate.item, quantity: remaining },
+        });
       }
       // Fully covered (remaining <= 0): drop the item from the generated list.
     }

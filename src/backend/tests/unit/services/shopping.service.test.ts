@@ -15,6 +15,8 @@ import { ShoppingService } from '../../../src/services/shopping.service';
 import { CacheService } from '../../../src/services/cache.service';
 import { PantryService } from '../../../src/services/pantry.service';
 import { ShoppingModel } from '../../../src/models/shopping.model';
+import { RecipeModel } from '../../../src/models/recipe.model';
+import { IngredientModel } from '../../../src/models/ingredient.model';
 import {
     IShoppingList,
     IShoppingListItem,
@@ -41,6 +43,21 @@ jest.mock('../../../src/utils/logger');
 // injection in beforeEach, so behavior under test is unaffected.
 jest.mock('../../../src/services/pantry.service', () => ({
     PantryService: jest.fn()
+}));
+
+// RecipeModel and IngredientModel are mocked with EXPLICIT factories (NOT auto-mock) for the
+// same reason as PantryService above: their committed source files carry pre-existing,
+// out-of-scope type errors (custom Mongoose statics not declared on the Model type). An
+// auto-mock would force jest to load + ts-jest-transform those real files at runtime to derive
+// their shape, surfacing the unrelated errors and failing this suite. The factories expose only
+// the single static the System Under Test consumes — find() — as a jest.fn(), so generate()
+// performs a fully-mocked, no-real-DB recipe/ingredient lookup while the dirty model files stay
+// unloaded. The recipe-driven generation specs below drive these finds.
+jest.mock('../../../src/models/recipe.model', () => ({
+    RecipeModel: { find: jest.fn() }
+}));
+jest.mock('../../../src/models/ingredient.model', () => ({
+    IngredientModel: { find: jest.fn() }
 }));
 
 describe('ShoppingService', () => {
@@ -77,20 +94,79 @@ describe('ShoppingService', () => {
 
     const mockLists: IShoppingList[] = [mockList];
 
-    // Exclusion-OFF generation options (reused by the generate() no-exclusion path).
-    const mockOptions: IShoppingListGenerationOptions = {
-        recipeIds: ['recipe1'],
+    // -----------------------------------------------------------------------
+    // Recipe-driven generation fixtures (Feature 1 generate()).
+    // generate() is RECIPE-SOURCED: it loads the referenced recipes, resolves each recipe
+    // ingredient line against the TRUSTED IngredientModel master collection to obtain the real
+    // ingredient name + category, scales quantities by (targetServings / recipe.servings), and
+    // (optionally) merges duplicates and subtracts pantry inventory. Client-supplied recipe ids
+    // are NEVER echoed into item names.
+    // -----------------------------------------------------------------------
+
+    // Canonical, opaque ingredient ids. Pantry matching and duplicate merging key on THESE ids
+    // (never the display name), which the exclusion + merge specs deliberately rely on.
+    const ING_MILK = 'ing_milk_0001';
+    const ING_FLOUR = 'ing_flour_0002';
+    const ING_EGGS = 'ing_eggs_0003';
+
+    // Trusted ingredient master records: id -> { name, category }. These are the ONLY source of
+    // a generated item's persisted name/category (IngredientModel.find resolves to this set).
+    const ingredientMasters = [
+        { id: ING_MILK, name: 'Milk', category: 'Dairy' },
+        { id: ING_FLOUR, name: 'Flour', category: 'Baking' },
+        { id: ING_EGGS, name: 'Eggs', category: 'Dairy' }
+    ];
+
+    // Primary recipe (base servings 4). Ingredient lines reference ingredients by id only.
+    const mockRecipeId = 'recipe_pancakes_01';
+    const pancakesRecipe = {
+        id: mockRecipeId,
+        name: 'Pancakes',
         servings: 4,
+        ingredients: [
+            { ingredientId: ING_MILK, quantity: 2, unit: 'cup', notes: '' },
+            { ingredientId: ING_FLOUR, quantity: 3, unit: 'cup', notes: '' },
+            { ingredientId: ING_EGGS, quantity: 2, unit: 'unit', notes: '' }
+        ]
+    };
+
+    // Secondary recipe (base servings 2) that ALSO uses Milk in the SAME unit ('cup'), so at a
+    // target of 4 servings (scale 2 -> 2 cup) it merges with Pancakes' 2 cup -> 4 cup.
+    const smoothieRecipe = {
+        id: 'recipe_smoothie_02',
+        name: 'Smoothie',
+        servings: 2,
+        ingredients: [{ ingredientId: ING_MILK, quantity: 1, unit: 'cup', notes: '' }]
+    };
+
+    // Recipe referencing an ingredient with NO master record, to prove unresolved ingredient
+    // lines are SKIPPED (and logged) rather than echoed into item names (CWE-20/CWE-79).
+    const mysteryRecipe = {
+        id: 'recipe_mystery_03',
+        name: 'Mystery',
+        servings: 1,
+        ingredients: [
+            { ingredientId: 'ing_unknown_999', quantity: 1, unit: 'unit', notes: '' },
+            { ingredientId: ING_EGGS, quantity: 1, unit: 'unit', notes: '' }
+        ]
+    };
+
+    // Exclusion-OFF, single-recipe options (servings 8 over base 4 -> scale 2) used by the
+    // aggregation/scaling spec.
+    const mockOptions: IShoppingListGenerationOptions = {
+        recipeIds: [mockRecipeId],
+        servings: 8,
         excludeInventoryItems: false,
         mergeDuplicates: false
     };
 
-    // A pantry whose on-hand `ingredientId` deliberately matches the generated item `name`
-    // (`Recipe milk`, case-insensitively) so the inventory-exclusion subtraction is deterministic.
+    // A pantry whose on-hand item is keyed by the canonical INGREDIENT ID (ING_MILK), NOT the
+    // display name — so exclusion correctness depends on id matching. Holds 2 cup of Milk,
+    // exactly covering the (scale-1) Pancakes Milk line so it is dropped from the generated list.
     const mockPantryItem: PantryItem = {
-        ingredientId: 'Recipe milk',
+        ingredientId: ING_MILK,
         quantity: 2,
-        unit: 'L',
+        unit: 'cup',
         location: StorageLocation.PANTRY,
         purchaseDate: new Date(),
         expirationDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
@@ -299,65 +375,180 @@ describe('ShoppingService', () => {
     });
 
     describe('generate', () => {
-        // Test: Exclusion ON + merge ON — pantry is read, duplicates merged, inventory subtracted.
-        it('should exclude pantry inventory and merge duplicates when both flags are set', async () => {
-            // Arrange — two identical 'milk' recipes (servings 5) merge into one candidate of qty 10;
-            // the pantry holds 2 of the matching ingredient, so the persisted item is reduced (-> 8).
-            const exclusionOptions: IShoppingListGenerationOptions = {
-                recipeIds: ['milk', 'milk'],
-                servings: 5,
-                excludeInventoryItems: true,
-                mergeDuplicates: true
-            };
-            (pantryService.getPantry as jest.Mock).mockResolvedValue(mockPantry);
+        // Arrange helper: wire the recipe + ingredient model finds and the create/cache mocks.
+        // Callers pass the recipe docs RecipeModel.find should resolve; the ingredient master set
+        // is constant across specs. (RecipeModel/IngredientModel are the explicit-factory mocks.)
+        const arrangeRecipes = (recipes: unknown[]): void => {
+            (RecipeModel.find as jest.Mock).mockResolvedValue(recipes);
+            (IngredientModel.find as jest.Mock).mockResolvedValue(ingredientMasters);
             (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
             cacheService.clear.mockResolvedValue(undefined);
+        };
 
-            // Act
-            const result = await shoppingService.generate(mockUserId, exclusionOptions);
-
-            // Assert — getPantry is consulted ONLY because excludeInventoryItems is true.
-            expect(pantryService.getPantry).toHaveBeenCalledWith(mockUserId);
-
-            // Inspect the argument passed to the mocked create() (NOT the mocked return value).
-            const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
-            expect(createArg.userId).toBe(mockUserId);
-            expect(createArg.generationOptions).toEqual(exclusionOptions);
-
-            // MERGE: the two duplicate 'milk' candidates collapsed into a single item.
-            expect(createArg.items).toHaveLength(1);
-
-            // SUBTRACTION: on-hand inventory was subtracted from the merged quantity (10 -> 8).
-            // Robust bounds (rather than coupling to the exact internal value) keep the test resilient.
-            expect(createArg.items[0].quantity).toBeLessThan(10);
-            expect(createArg.items[0].quantity).toBeGreaterThan(0);
-
-            // The per-user cache is invalidated (all pagination windows) and the list is returned.
-            expect(cacheService.clear).toHaveBeenCalledWith(`shopping:${mockUserId}:*`);
-            expect(result).toEqual(mockList);
-        });
-
-        // Test: Exclusion OFF — the pantry is never consulted and nothing is subtracted.
-        it('should not consult the pantry when excludeInventoryItems is false', async () => {
-            // Arrange — single recipe, no merge, no exclusion (servings 4 -> quantity 4).
-            (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
-            cacheService.clear.mockResolvedValue(undefined);
+        // Test: recipe-derived aggregation — items come from RESOLVED recipe ingredients (trusted
+        // name/category), quantities are serving-scaled, and recipeId/recipeName are propagated.
+        // The pantry is NOT consulted (exclusion off).
+        it('derives items from recipe ingredients, scales by servings, and propagates recipe metadata', async () => {
+            // Arrange — Pancakes (base servings 4) generated for 8 servings -> scale 2.
+            arrangeRecipes([pancakesRecipe]);
 
             // Act
             const result = await shoppingService.generate(mockUserId, mockOptions);
 
-            // Assert — getPantry is NOT called on the no-exclusion path.
+            // Assert — the recipes AND their ingredient masters were both queried (recipe-sourced).
+            expect(RecipeModel.find).toHaveBeenCalledWith({ _id: { $in: [mockRecipeId] } });
+            expect(IngredientModel.find).toHaveBeenCalledWith({
+                _id: { $in: expect.arrayContaining([ING_MILK, ING_FLOUR, ING_EGGS]) }
+            });
+            // Exclusion is OFF -> the pantry is never read.
             expect(pantryService.getPantry).not.toHaveBeenCalled();
 
             const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
             expect(createArg.userId).toBe(mockUserId);
             expect(createArg.generationOptions).toEqual(mockOptions);
 
-            // Nothing subtracted: the single candidate keeps its full serving-scaled quantity.
-            expect(createArg.items).toHaveLength(1);
-            expect(createArg.items[0].quantity).toBe(4);
+            // THREE items, one per resolved recipe ingredient line.
+            const items = createArg.items as IShoppingListItem[];
+            expect(items).toHaveLength(3);
+
+            // Names/categories come from the trusted ingredient MASTER (never 'Recipe <id>'), and
+            // NO item name contains a client-supplied recipe/ingredient id (CWE-20/79).
+            const names = items.map((it) => it.name).sort();
+            expect(names).toEqual(['Eggs', 'Flour', 'Milk']);
+            for (const it of items) {
+                expect(it.name.startsWith('Recipe ')).toBe(false);
+                expect(it.name.includes(mockRecipeId)).toBe(false);
+            }
+
+            // Serving scaling: each quantity is the recipe line quantity * (8 / 4) = *2.
+            const milk = items.find((it) => it.name === 'Milk');
+            const flour = items.find((it) => it.name === 'Flour');
+            const eggs = items.find((it) => it.name === 'Eggs');
+            expect(milk?.quantity).toBe(4); // 2 * 2
+            expect(flour?.quantity).toBe(6); // 3 * 2
+            expect(eggs?.quantity).toBe(4); // 2 * 2
+
+            // Category from the master record; unit preserved from the recipe line.
+            expect(milk?.category).toBe('Dairy');
+            expect(flour?.category).toBe('Baking');
+            expect(milk?.unit).toBe('cup');
+
+            // recipeId/recipeName propagated from the source recipe on every item.
+            for (const it of items) {
+                expect(it.recipeId).toBe(mockRecipeId);
+                expect(it.recipeName).toBe('Pancakes');
+            }
+
+            // The per-user cache is invalidated (all pagination windows) and the list is returned.
+            expect(cacheService.clear).toHaveBeenCalledWith(`shopping:${mockUserId}:*`);
+            expect(result).toEqual(mockList);
+        });
+
+        // Test: duplicate ingredients (same ingredient id + unit) across recipes merge into a
+        // single line whose quantity is the sum of the serving-scaled contributions.
+        it('merges duplicate ingredients (same id + unit) across recipes when mergeDuplicates is set', async () => {
+            // Arrange — Pancakes (servings 4) + Smoothie (servings 2), target 4 servings:
+            //   Pancakes Milk: 2 cup * (4/4 = 1) -> 2 cup
+            //   Smoothie Milk: 1 cup * (4/2 = 2) -> 2 cup   => merged Milk = 4 cup
+            arrangeRecipes([pancakesRecipe, smoothieRecipe]);
+            const mergeOptions: IShoppingListGenerationOptions = {
+                recipeIds: [mockRecipeId, smoothieRecipe.id],
+                servings: 4,
+                excludeInventoryItems: false,
+                mergeDuplicates: true
+            };
+
+            // Act
+            await shoppingService.generate(mockUserId, mergeOptions);
+
+            // Assert — Milk collapsed to ONE line (Flour + Eggs from Pancakes remain) -> 3 items.
+            const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
+            const items = createArg.items as IShoppingListItem[];
+            expect(items).toHaveLength(3);
+
+            const milk = items.filter((it) => it.name === 'Milk');
+            expect(milk).toHaveLength(1);
+            expect(milk[0].quantity).toBe(4); // 2 + 2 summed across the two recipes
+            // First-occurrence recipe association is preserved on the merged line.
+            expect(milk[0].recipeName).toBe('Pancakes');
+        });
+
+        // Test: inventory exclusion subtracts on-hand pantry quantity matched by INGREDIENT ID
+        // (not name); getPantry is consulted only because excludeInventoryItems is true.
+        it('subtracts pantry inventory matched by ingredient id when excludeInventoryItems is set', async () => {
+            // Arrange — Pancakes for 4 servings (scale 1): Milk 2 cup, Flour 3 cup, Eggs 2 unit.
+            // Pantry holds 2 cup of Milk keyed by ING_MILK -> Milk fully covered -> dropped.
+            arrangeRecipes([pancakesRecipe]);
+            (pantryService.getPantry as jest.Mock).mockResolvedValue(mockPantry);
+            const exclusionOptions: IShoppingListGenerationOptions = {
+                recipeIds: [mockRecipeId],
+                servings: 4,
+                excludeInventoryItems: true,
+                mergeDuplicates: false
+            };
+
+            // Act
+            const result = await shoppingService.generate(mockUserId, exclusionOptions);
+
+            // Assert — exclusion path read the pantry exactly once for this user.
+            expect(pantryService.getPantry).toHaveBeenCalledWith(mockUserId);
+
+            const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
+            const items = createArg.items as IShoppingListItem[];
+            // Milk (2 cup) is fully covered by 2 cup on hand -> dropped; Flour + Eggs remain.
+            const names = items.map((it) => it.name).sort();
+            expect(names).toEqual(['Eggs', 'Flour']);
+            expect(names).not.toContain('Milk');
 
             expect(cacheService.clear).toHaveBeenCalledWith(`shopping:${mockUserId}:*`);
+            expect(result).toEqual(mockList);
+        });
+
+        // Test (security, CWE-20/CWE-79): a recipe ingredient line with no resolvable master record
+        // is SKIPPED — never echoed into a persisted item name.
+        it('skips recipe ingredients with no resolvable master record (no client id echo)', async () => {
+            // Arrange — Mystery recipe references an unknown ingredient id plus Eggs.
+            arrangeRecipes([mysteryRecipe]);
+            const opts: IShoppingListGenerationOptions = {
+                recipeIds: [mysteryRecipe.id],
+                servings: 1,
+                excludeInventoryItems: false,
+                mergeDuplicates: false
+            };
+
+            // Act
+            await shoppingService.generate(mockUserId, opts);
+
+            // Assert — only the RESOLVABLE Eggs line survives; the unknown id never appears as a name.
+            const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
+            const items = createArg.items as IShoppingListItem[];
+            expect(items).toHaveLength(1);
+            expect(items[0].name).toBe('Eggs');
+            for (const it of items) {
+                expect(it.name.includes('ing_unknown_999')).toBe(false);
+            }
+        });
+
+        // Test: with no recipe ids the generator creates an empty (zero-item) list and never queries
+        // recipes — confirming generation only includes recipe-sourced items.
+        it('creates an empty list when no recipe ids are provided', async () => {
+            // Arrange — empty recipe id set; nothing to query/aggregate.
+            (ShoppingModel.create as jest.Mock).mockResolvedValue(mockList);
+            cacheService.clear.mockResolvedValue(undefined);
+            const emptyOpts: IShoppingListGenerationOptions = {
+                recipeIds: [],
+                servings: 2,
+                excludeInventoryItems: false,
+                mergeDuplicates: false
+            };
+
+            // Act
+            const result = await shoppingService.generate(mockUserId, emptyOpts);
+
+            // Assert — no recipe query was issued and zero items were persisted.
+            expect(RecipeModel.find).not.toHaveBeenCalled();
+            const createArg = (ShoppingModel.create as jest.Mock).mock.calls[0][0];
+            expect(createArg.items).toHaveLength(0);
             expect(result).toEqual(mockList);
         });
     });

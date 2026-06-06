@@ -46,9 +46,13 @@ services:
       - mongodb_data:/data/db
     ports:
       - "27017:27017"
+    # SECURITY (CWE-798): credentials are injected from the environment — a local, git-ignored
+    # `.env` file in this directory (Docker Compose loads it automatically) — so NO secrets are
+    # committed in this file. Set MONGO_USER / MONGO_PASSWORD locally (same variable names used by
+    # the production infra compose for consistency).
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=dev
-      - MONGO_INITDB_ROOT_PASSWORD=dev_password
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
     networks:
       - backend_dev_network
 
@@ -86,9 +90,12 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672" # Management UI port
+    # SECURITY (CWE-798): credentials injected from the environment / local git-ignored `.env`
+    # (no secrets committed). Set RABBITMQ_USER / RABBITMQ_PASSWORD locally — same variable names
+    # used by the production infra compose for consistency.
     environment:
-      - RABBITMQ_DEFAULT_USER=dev
-      - RABBITMQ_DEFAULT_PASS=dev_password
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
     networks:
       - backend_dev_network
 

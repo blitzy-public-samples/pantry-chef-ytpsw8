@@ -8,15 +8,20 @@ services:
     build:
       context: ../../src/backend
       dockerfile: ../../infrastructure/docker/backend.dockerfile
+    # SECURITY (CWE-798): datastore credentials are injected from the deployment environment
+    # (a secrets manager or a git-ignored `.env` / Docker secrets) — NO credentials are committed
+    # in this file. The same ${MONGO_USER}/${MONGO_PASSWORD} and ${RABBITMQ_USER}/${RABBITMQ_PASSWORD}
+    # values MUST be supplied to the mongodb and rabbitmq services below so the connection URIs and
+    # the broker/db root credentials stay in sync.
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - MONGODB_URI=mongodb://admin:secret@mongodb:27017/pantrychef
+      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/pantrychef
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - RABBITMQ_URL=amqp://admin:secret@rabbitmq:5672
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - TZ=UTC
     ports:
       - "3000:3000"
@@ -92,9 +97,11 @@ services:
       - mongodb_data:/data/db:rw
     ports:
       - "27017:27017"
+    # SECURITY (CWE-798): root credentials are injected from the deployment environment / Docker
+    # secrets — the SAME ${MONGO_USER}/${MONGO_PASSWORD} consumed by the backend MONGODB_URI above.
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=secret
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
       - MONGO_INITDB_DATABASE=pantrychef
     restart: unless-stopped
     command: mongod --wiredTigerCacheSizeGB 1
@@ -150,9 +157,11 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    # SECURITY (CWE-798): broker credentials are injected from the deployment environment / Docker
+    # secrets — the SAME ${RABBITMQ_USER}/${RABBITMQ_PASSWORD} consumed by the backend RABBITMQ_URL above.
     environment:
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=secret
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
       - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6
     restart: unless-stopped
     healthcheck:

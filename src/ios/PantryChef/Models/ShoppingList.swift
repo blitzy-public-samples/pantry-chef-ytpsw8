@@ -49,6 +49,7 @@ public class ShoppingListItem: NSObject, Codable {
     // the canonical camelCase responses.
     enum CodingKeys: String, CodingKey {
         case id, name, quantity, unit, category, notes
+        case mongoId = "_id"           // compatibility fallback: decode Mongo `_id` when canonical `id` is absent; NEVER encoded
         case isPurchased = "checked"   // server/web uses `checked`; iOS uses `isPurchased`
         case recipeId                  // camelCase `recipeId` matches the server/web contract
         case recipeName                // camelCase `recipeName` matches the server/web contract
@@ -90,7 +91,14 @@ public class ShoppingListItem: NSObject, Codable {
     /// `public` to satisfy the public `Decodable` conformance of this public class.
     public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        // Prefer the canonical `id`; fall back to Mongo `_id` for compatibility so a
+        // server-originated item keeps the SERVER's identifier (required for the PATCH
+        // toggle route to match the backend ObjectId). Only mint a local UUID when
+        // BOTH are absent — i.e. a genuinely new, client-created item — never for
+        // server payloads.
+        self.id = try container.decodeIfPresent(String.self, forKey: .id)
+            ?? container.decodeIfPresent(String.self, forKey: .mongoId)
+            ?? UUID().uuidString
         self.name = try container.decode(String.self, forKey: .name)
         self.quantity = try container.decodeIfPresent(Double.self, forKey: .quantity) ?? 0
         self.unit = try container.decodeIfPresent(String.self, forKey: .unit) ?? ""
@@ -157,6 +165,7 @@ public class ShoppingList: NSObject, Codable {
     // decode defensively when absent.
     enum CodingKeys: String, CodingKey {
         case id, name, userId, items, isCompleted, createdAt, updatedAt, completedAt, generationOptions
+        case mongoId = "_id"  // compatibility fallback: decode Mongo `_id` when canonical `id` is absent; NEVER encoded
     }
     
     // MARK: - Initialization
@@ -269,7 +278,12 @@ public class ShoppingList: NSObject, Codable {
     /// `public` to satisfy the public `Decodable` conformance of this public class.
     public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = try container.decode(String.self, forKey: .id)
+        // `id` is required, but accept either the canonical `id` or Mongo `_id`:
+        // prefer `id`, fall back to `_id`, and throw only when BOTH are absent. This
+        // keeps the server's identifier so list-scoped routes (PUT/DELETE/generate/
+        // toggle) address the correct document, and never invents a client id.
+        self.id = try container.decodeIfPresent(String.self, forKey: .id)
+            ?? container.decode(String.self, forKey: .mongoId)
         self.name = try container.decode(String.self, forKey: .name)
         self.userId = try container.decode(String.self, forKey: .userId)
         self.items = try container.decodeIfPresent([ShoppingListItem].self, forKey: .items) ?? []
