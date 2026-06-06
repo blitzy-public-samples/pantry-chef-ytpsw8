@@ -94,6 +94,9 @@ export const rateLimiterMiddleware = (options: {
         } catch (error) {
             if (error.remainingPoints !== undefined) {
                 // Rate limit exceeded error
+                // Set the HTTP Retry-After header (seconds) before throwing so the 429 response
+                // carries it directly; the global errorHandler only embeds retryAfter in the JSON body.
+                res.set('Retry-After', String(Math.ceil(error.msBeforeNext / 1000)));
                 throw new AppError(
                     'Rate limit exceeded',
                     RATE_LIMIT_EXCEEDED_CODE,
@@ -117,27 +120,19 @@ export const rateLimiterMiddleware = (options: {
         }
     };
 };
-```
 
-This implementation:
+/**
+ * Pre-configured limiter for the image upload route: 10 requests per user per minute.
+ * Consumed by routes/image.routes.ts on POST /upload.
+ * Reuses the shared rateLimiterMiddleware factory so per-user keying and the
+ * Retry-After header on 429 responses are inherited automatically.
+ */
+export const imageUploadLimiter = rateLimiterMiddleware({ points: 10, duration: 60, keyPrefix: 'image:upload' });
 
-1. Addresses the rate limiting requirements from section 9.3.1 of the technical specification by implementing a Redis-backed rate limiter.
-2. Uses the AppError class from errors.ts for consistent error handling.
-3. Uses the Redis client factory from redis.ts for store configuration.
-4. Implements configurable rate limiting with default values.
-5. Adds standard rate limit headers to responses.
-6. Includes monitoring context in error objects.
-7. Provides flexible client identification using IP or user ID.
-8. Implements a fallback insurance limiter for Redis failures.
-9. Uses TypeScript for type safety.
-10. Follows the security protocols outlined in section 9.3.
-
-The middleware can be used in route configurations with custom options:
-
-```typescript
-app.use('/api', rateLimiterMiddleware({
-    points: 100,      // 100 requests
-    duration: 3600,   // per hour
-    blockDuration: 0, // no blocking duration
-    keyPrefix: 'api'  // Redis key prefix
-}));
+/**
+ * Pre-configured limiter for the recipe match route: 30 requests per user per minute.
+ * Consumed by routes/recipe.routes.ts on POST /match.
+ * Reuses the shared rateLimiterMiddleware factory so per-user keying and the
+ * Retry-After header on 429 responses are inherited automatically.
+ */
+export const recipeMatchLimiter = rateLimiterMiddleware({ points: 30, duration: 60, keyPrefix: 'recipe:match' });
