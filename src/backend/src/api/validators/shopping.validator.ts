@@ -71,7 +71,15 @@ export const createShoppingListValidation = [
     .isLength({ max: 100 })
     .withMessage('Item name cannot exceed 100 characters'),
 
+  // [FINDING-INJECT-01] Reject a non-scalar quantity (e.g. an array) BEFORE `.isFloat()`:
+  // express-validator coerces an array to its first element when running standard validators,
+  // so `quantity: [1, 2]` would otherwise pass and reach Mongoose as a CastError (HTTP 500).
+  // The `.not().isArray().bail()` guard rejects such input with a 400 instead.
   body('items.*.quantity')
+    .not()
+    .isArray()
+    .withMessage('Item quantity must be a number, not an array')
+    .bail()
     .isFloat({ min: 0 })
     .withMessage('Item quantity must be a non-negative number'),
 
@@ -157,8 +165,15 @@ export const updateShoppingListValidation = [
     .isLength({ max: 100 })
     .withMessage('Item name cannot exceed 100 characters'),
 
+  // [FINDING-INJECT-01] Same array guard as the create chain, placed after `.optional()` so a
+  // missing quantity still passes on partial update while a present array is rejected with 400
+  // rather than reaching Mongoose as a CastError (HTTP 500).
   body('items.*.quantity')
     .optional()
+    .not()
+    .isArray()
+    .withMessage('Item quantity must be a number, not an array')
+    .bail()
     .isFloat({ min: 0 })
     .withMessage('Item quantity must be a non-negative number'),
 

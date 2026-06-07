@@ -33,8 +33,8 @@ function formatErrorResponse(error: Error, req: Request): Record<string, any> {
             error: {
                 code: error.code,
                 message: error.message,
-                context: error.context,
                 statusCode: error.statusCode,
+                ...(process.env.NODE_ENV === 'development' && { context: error.context }),
                 ...(error instanceof ValidationError && {
                     validationErrors: error.validationErrors
                 })

@@ -45,7 +45,7 @@ export const configureRoutes = (app: Application): void => {
                 scriptSrc: ["'self'", "'unsafe-inline'"],
                 styleSrc: ["'self'", "'unsafe-inline'"],
                 imgSrc: ["'self'", 'data:', 'https:'],
-                connectSrc: ["'self'", process.env.API_URL as string],
+                connectSrc: ["'self'", process.env.API_URL].filter(Boolean) as string[],
             },
         },
         referrerPolicy: { policy: 'strict-origin-when-cross-origin' },

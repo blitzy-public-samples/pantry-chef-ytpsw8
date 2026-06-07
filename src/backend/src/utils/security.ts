@@ -227,13 +227,21 @@ export async function verifyToken(token: string): Promise<TokenPayload> {
       algorithms: jwtConfig.allowedAlgorithms as jwt.Algorithm[]
     }) as TokenPayload;
     
-    // Validate decoded payload structure
+    // Validate decoded payload structure. A correctly-signed token missing required claims
+    // (email/roles) is an invalid-token (client) condition, not a server fault: throw a 401
+    // AppError (FINDING-AUTH-01) — not a plain Error that would fall through to a 500 below.
     if (!decoded.userId || !decoded.email || !Array.isArray(decoded.roles)) {
-      throw new Error('Invalid token payload structure');
+      throw new AppError('Invalid token', 401, 'ERR_TOKEN_INVALID');
     }
     
     return decoded;
   } catch (error) {
+    // An AppError thrown above (e.g. the 401 invalid-payload case) is already client-safe and
+    // correctly classified — re-throw it unchanged so it is not re-wrapped as a 500 below
+    // (FINDING-AUTH-01).
+    if (error instanceof AppError) {
+      throw error;
+    }
     if (error instanceof jwt.TokenExpiredError) {
       throw new AppError(
         'Token has expired',
