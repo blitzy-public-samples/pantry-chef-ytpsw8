@@ -67,6 +67,28 @@ interface ApiEnvelope<T> {
 }
 
 /**
+ * Removes server-managed fields from an outbound create/update payload.
+ *
+ * The backend create/update validators explicitly REJECT client-supplied
+ * server-managed fields (`id`/`_id`, `userId`, `createdAt`, `updatedAt`) and respond
+ * with HTTP 400. The web client, however, holds full `ShoppingList` objects in Redux
+ * (each already carrying `id`, `createdAt`, `updatedAt`, and `userId` from a prior fetch
+ * or from a `Date.now()`-stamped draft), so forwarding the whole object on create/update
+ * tripped that validation. Stripping these fields here keeps the request body aligned
+ * with the backend contract — the server remains the sole authority for identifiers and
+ * timestamps — without mutating the caller's local domain object (a shallow copy is used).
+ */
+const stripServerManagedFields = (payload: Partial<ShoppingList>): Partial<ShoppingList> => {
+  const sanitized = { ...payload } as Record<string, unknown>;
+  delete sanitized.id;
+  delete sanitized._id;
+  delete sanitized.userId;
+  delete sanitized.createdAt;
+  delete sanitized.updatedAt;
+  return sanitized as Partial<ShoppingList>;
+};
+
+/**
  * Service module implementing shopping list management functionality
  * Requirement: Shopping List Management (8.1 User Interface Design/Screen Components)
  */
@@ -112,7 +134,11 @@ const ShoppingService = {
   async createShoppingList(data: Partial<ShoppingList>): Promise<ShoppingList> {
     try {
       // POST / -> the mount base (NOT the doubled GET collection path).
-      const response = await apiClient.post<ApiEnvelope<ShoppingList>>(SHOPPING_API.BASE, data);
+      // Strip server-managed fields so the create validator does not 400 the request.
+      const response = await apiClient.post<ApiEnvelope<ShoppingList>>(
+        SHOPPING_API.BASE,
+        stripServerManagedFields(data)
+      );
       return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
@@ -126,7 +152,11 @@ const ShoppingService = {
   async updateShoppingList(id: string, data: Partial<ShoppingList>): Promise<ShoppingList> {
     try {
       // PUT /:id -> the mount base + id (NOT the doubled GET collection path).
-      const response = await apiClient.put<ApiEnvelope<ShoppingList>>(`${SHOPPING_API.BASE}/${id}`, data);
+      // Strip server-managed fields so the update validator does not 400 the request.
+      const response = await apiClient.put<ApiEnvelope<ShoppingList>>(
+        `${SHOPPING_API.BASE}/${id}`,
+        stripServerManagedFields(data)
+      );
       return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);

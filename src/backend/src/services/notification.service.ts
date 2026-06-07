@@ -185,14 +185,21 @@ export class NotificationService {
                 return;
             }
 
-            // Verify active socket connection
-            const userSocket = socketServer.sockets.sockets.get(userId);
-            if (!userSocket) {
+            // Verify an active socket connection exists for the user across ALL backend
+            // instances. The previous check, `socketServer.sockets.sockets.get(userId)`,
+            // was doubly incorrect: that Map is keyed by socket id (not user id), so it
+            // effectively never matched, and it only inspected sockets attached to the
+            // current process. `socketServer.in(userId).fetchSockets()` consults the Redis
+            // adapter, returning the user's sockets on any node, so presence detection is
+            // correct under horizontal scale.
+            const activeSockets = await socketServer.in(userId).fetchSockets();
+            if (activeSockets.length === 0) {
                 logger.warn('No active socket connection for user', { userId });
                 return;
             }
 
-            // Emit notification to user's socket room
+            // Emit notification to user's socket room. The room emit is itself adapter-aware,
+            // so it fans out to the user's sockets regardless of which instance they are on.
             socketServer.to(userId).emit('notification', {
                 type: notificationData.type,
                 payload: notificationData.payload,

@@ -7,7 +7,10 @@
 
 # Stage 1: Builder
 # Requirement: Backend Container Configuration - Configures Node.js API service container with optimized Alpine base image
-FROM node:16-alpine AS builder
+# Node 20 is required: package.json declares "engines": { "node": ">=20.20.2" }, and several
+# runtime dependencies (and `npm ci`) refuse to install/run on Node 16. The previous
+# node:16-alpine base failed the build outright on the engines gate.
+FROM node:20-alpine AS builder
 
 # Install build dependencies
 # Requirement: Backend Technology Stack - Sets up Node.js runtime environment with required dependencies
@@ -40,7 +43,8 @@ RUN npm prune --production
 
 # Stage 2: Production
 # Requirement: Production Environment Setup - Configures production-ready container environment
-FROM node:16-alpine
+# Node 20 to match the builder stage and the package.json engines requirement (>=20.20.2).
+FROM node:20-alpine
 
 # Install production dependencies
 RUN apk add --no-cache \

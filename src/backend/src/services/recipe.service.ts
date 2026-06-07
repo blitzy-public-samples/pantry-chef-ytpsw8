@@ -14,8 +14,21 @@ import { Recipe } from '../interfaces/recipe.interface';
 import { SearchService, SearchResult, SearchFilters } from './search.service';
 import { CacheService } from './cache.service';
 import { QueueService } from './queue.service';
+import { QUEUE_CONSTANTS } from '../utils/constants';
 import { AppError } from '../utils/errors';
 import { logger } from '../utils/logger';
+
+/**
+ * Matches a 24-character hexadecimal MongoDB ObjectId string.
+ *
+ * The recipe ingredient sub-schema persists `ingredientId` as a BSON ObjectId, so any
+ * value forwarded to a `$in` match query MUST be a valid ObjectId. Forwarding an
+ * arbitrary string (for example an injection-style payload such as `' OR 1=1 --`)
+ * triggers a Mongoose CastError that surfaces as an opaque HTTP 500. Sanitising the
+ * caller-supplied identifiers against this pattern keeps the recipe-match path safe and
+ * deterministic regardless of the input received from the public query string.
+ */
+const OBJECT_ID_PATTERN = /^[0-9a-fA-F]{24}$/;
 
 // Requirement: Recipe Service - Core recipe management service with sub-200ms response times
 export class RecipeService {
@@ -224,26 +237,60 @@ export class RecipeService {
         try {
             const startTime = Date.now();
 
-            // Check cache for ingredient-based matches
-            const cacheKey = `ingredients:${ingredientIds.sort().join(',')}`;
+            // Sanitize caller-supplied identifiers before they reach the persistence layer.
+            // `ingredientId` is stored as a BSON ObjectId, so forwarding a non-ObjectId
+            // string (e.g. an injection-style query such as `' OR 1=1 --`) to the `$in`
+            // match query raises a Mongoose CastError that would otherwise surface as an
+            // opaque HTTP 500. Filtering to well-formed ObjectId strings keeps the match
+            // path safe and predictable for arbitrary public input.
+            const sanitizedIngredientIds = ingredientIds.filter(
+                (id): id is string => typeof id === 'string' && OBJECT_ID_PATTERN.test(id.trim())
+            ).map((id) => id.trim());
+
+            // When no valid ingredient identifiers remain there is nothing to match against;
+            // return an empty result set rather than executing a query that cannot match.
+            if (sanitizedIngredientIds.length === 0) {
+                logger.info('Recipe matching skipped — no valid ingredient identifiers provided', {
+                    providedCount: ingredientIds.length,
+                    duration: Date.now() - startTime
+                });
+                return [];
+            }
+
+            // Check cache for ingredient-based matches (keyed on the sanitized identifiers)
+            const cacheKey = `ingredients:${[...sanitizedIngredientIds].sort().join(',')}`;
             const cachedResults = await this.cacheService.get<Recipe[]>(cacheKey);
             
             if (cachedResults) {
                 logger.info('Recipe matches retrieved from cache', {
-                    ingredientCount: ingredientIds.length,
+                    ingredientCount: sanitizedIngredientIds.length,
                     duration: Date.now() - startTime
                 });
                 return cachedResults;
             }
 
-            // Queue ingredient matching job for analytics
-            await QueueService.publishToQueue('recipe.matching', {
-                ingredientIds,
-                timestamp: new Date().toISOString()
-            });
+            // Queue ingredient matching job for analytics. This is a best-effort, non-blocking
+            // side effect: the analytics queue is consumed by the dedicated recipe-matching
+            // worker process, which is the only process that initializes the RabbitMQ channel.
+            // The API process does not initialize the queue channel, so a publish attempt here
+            // would otherwise throw ("Queue channel not initialized") and fail an otherwise
+            // successful match. A queue/transport failure must never break recipe matching, so
+            // any error is logged and swallowed. The canonical queue name from QUEUE_CONSTANTS
+            // is used so the producer aligns with the recipe-matching worker's consumer.
+            try {
+                await QueueService.publishToQueue(QUEUE_CONSTANTS.RECIPE_MATCHING_QUEUE, {
+                    ingredientIds: sanitizedIngredientIds,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (queueError) {
+                logger.warn('Recipe matching analytics publish skipped (queue unavailable)', {
+                    ingredientCount: sanitizedIngredientIds.length,
+                    error: (queueError as Error).message
+                });
+            }
 
             // Find matching recipes using MongoDB aggregation
-            const matchingRecipes = await RecipeModel.findByIngredients(ingredientIds);
+            const matchingRecipes = await RecipeModel.findByIngredients(sanitizedIngredientIds);
 
             // Cache results for future requests
             await this.cacheService.set(cacheKey, matchingRecipes, 3600); // 1 hour TTL
@@ -251,7 +298,7 @@ export class RecipeService {
             // Log performance metrics
             const duration = Date.now() - startTime;
             logger.info('Recipe matches found', {
-                ingredientCount: ingredientIds.length,
+                ingredientCount: sanitizedIngredientIds.length,
                 matchCount: matchingRecipes.length,
                 duration,
                 timestamp: new Date().toISOString()

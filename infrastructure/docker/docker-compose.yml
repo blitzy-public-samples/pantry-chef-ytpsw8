@@ -6,8 +6,15 @@ services:
   # Backend API Service
   backend:
     build:
-      context: ../../src/backend
-      dockerfile: ../../infrastructure/docker/backend.dockerfile
+      # Build context is the REPOSITORY ROOT (two levels up from infrastructure/docker).
+      # backend.dockerfile COPYs repository-root-relative paths (e.g.
+      # `COPY src/backend/package*.json`, `COPY src/backend/src ./src`); the previous
+      # `../../src/backend` context made those resolve to `src/backend/src/backend/...`,
+      # producing the "/src/backend/src: not found" build failure. With the repo root as
+      # context the dockerfile's COPY paths resolve correctly. The dockerfile path is now
+      # expressed relative to that context.
+      context: ../../
+      dockerfile: infrastructure/docker/backend.dockerfile
     # SECURITY (CWE-798): datastore credentials are injected from the deployment environment
     # (a secrets manager or a git-ignored `.env` / Docker secrets) — NO credentials are committed
     # in this file. The same ${MONGO_USER}/${MONGO_PASSWORD} and ${RABBITMQ_USER}/${RABBITMQ_PASSWORD}

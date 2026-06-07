@@ -7,7 +7,9 @@
 
 # Stage 1: Builder
 # Requirement: Backend Container Configuration - Configures Node.js API service container with optimized Alpine base image
-FROM node:16-alpine AS builder
+# Node 20 is required by package.json "engines": { "node": ">=20.20.2" }; node:16-alpine
+# fails `npm ci`/runtime on the engines gate.
+FROM node:20-alpine AS builder
 
 # Install build dependencies
 # Requirement: Backend Technology Stack - Sets up Node.js runtime environment with required dependencies
@@ -41,9 +43,51 @@ RUN npm run build
 # Prune development dependencies
 RUN npm prune --production
 
-# Stage 2: Production
+# Stage 2: Development
+# Requirement: Development Environment - Hot-reloading dev container referenced by
+# docker-compose.dev.yml (build target: development). This stage installs the FULL
+# dependency set (including devDependencies such as ts-node/typescript) so `npm run dev`
+# (ts-node src/server.ts) works, and so the `node_modules` named volume the dev compose
+# mounts is seeded with all dev/runtime deps on first run. The dev compose bind-mounts the
+# source (../src, ../package.json, ../tsconfig.json) and overrides the command, so this
+# stage only needs a complete, runnable baseline image.
+FROM node:20-alpine AS development
+
+# Install build dependencies for native modules (bcrypt/sharp/@tensorflow/tfjs-node)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    curl \
+    build-base
+
+WORKDIR /app
+
+# Install the complete dependency set (dev + prod) for hot-reloading development
+COPY package*.json ./
+RUN npm ci
+
+# Provide a baseline copy of the configuration and source (the dev compose bind-mounts
+# live copies over these at runtime for hot-reloading)
+COPY tsconfig.json ./
+COPY src/ ./src/
+
+# Development environment variables
+ENV NODE_ENV=development \
+    PORT=3000 \
+    TZ=UTC
+
+# Expose the API port and the Node.js inspector/debug port used by docker-compose.dev.yml
+EXPOSE 3000 9229
+
+# Run the TypeScript dev server (overridable by the compose `command`)
+CMD ["npm", "run", "dev"]
+
+# Stage 3: Production
 # Requirement: Production Environment Setup - Configures production-ready container with security and performance optimizations
-FROM node:16-alpine
+# Named `production` so docker-compose.yml (build target: production) resolves to this stage.
+# Node 20 matches the builder stage and the package.json engines requirement (>=20.20.2).
+FROM node:20-alpine AS production
 
 # Install production dependencies
 RUN apk add --no-cache \

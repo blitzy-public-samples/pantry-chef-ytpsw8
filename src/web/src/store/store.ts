@@ -12,6 +12,7 @@ import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import { 
   persistStore, 
   persistReducer,
+  createTransform,
   FLUSH,
   REHYDRATE,
   PAUSE,
@@ -39,6 +40,35 @@ const rootReducer = combineReducers({
 });
 
 /**
+ * Minimal structural shape of the persisted shopping slice that the transform below
+ * operates on. The full `ShoppingState` interface is private to `shoppingSlice`, so only
+ * the transient request-status fields relevant to persistence are declared here; the index
+ * signature preserves all durable fields (lists, currentList, filter) untouched.
+ */
+interface PersistedShoppingState {
+  loading: boolean;
+  error: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Requirement: Performance Optimization — persist only DURABLE shopping data.
+ *
+ * The shopping slice carries transient request status (`loading`, `error`) alongside the
+ * durable list data. Persisting those transient fields traps one-off network failures (for
+ * example "Network error - no response received") and stale loading flags in storage, so a
+ * later session rehydrates into a phantom error/loading state. This transform strips the
+ * transient fields when state is written to storage (inbound) and again on rehydrate
+ * (outbound) — resetting them to their initial values — while leaving the durable list data
+ * (lists, currentList, filter) fully persisted. Scoped to the `shopping` slice only.
+ */
+const shoppingPersistTransform = createTransform<PersistedShoppingState, PersistedShoppingState>(
+  (inboundState) => ({ ...inboundState, loading: false, error: null }),
+  (outboundState) => ({ ...outboundState, loading: false, error: null }),
+  { whitelist: ['shopping'] }
+);
+
+/**
  * Requirement: Performance Optimization (1.1 System Overview/Redis caching layer)
  * Redux persist configuration for offline capabilities
  */
@@ -48,6 +78,9 @@ const persistConfig = {
   storage,
   whitelist: ['auth', 'inventory', 'recipe', 'shopping'], // Persist these reducers
   blacklist: [], // No reducers excluded from persistence
+  // Strip transient loading/error from the shopping slice so failed/in-flight requests
+  // are never frozen into durable storage (see shoppingPersistTransform above).
+  transforms: [shoppingPersistTransform],
 };
 
 /**

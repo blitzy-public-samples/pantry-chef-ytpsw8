@@ -82,8 +82,10 @@ export class WebSocketServer {
         const pantryService = new PantryService(cacheService, queueService, notificationService);
         const recipeService = new RecipeService(searchService, cacheService, queueService);
 
-        // Initialize handlers with their resolved service dependencies.
-        this.notificationHandler = new NotificationHandler(notificationService);
+        // Initialize handlers with their resolved service dependencies. NotificationHandler
+        // receives the live Socket.IO `Server` so it can derive connection presence from
+        // adapter-backed rooms (cross-node) rather than a process-local connection map.
+        this.notificationHandler = new NotificationHandler(notificationService, this.io);
         this.pantryHandler = new PantryWebSocketHandler(pantryService);
         this.recipeHandler = new RecipeHandler(recipeService);
 

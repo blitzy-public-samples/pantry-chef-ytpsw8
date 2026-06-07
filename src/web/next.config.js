@@ -13,6 +13,58 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 // is unchanged.
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api/v1';
 
+// Build the Content-Security-Policy `connect-src` allowlist.
+//
+// The web app issues XHR/fetch and WebSocket requests to the backend API and realtime
+// origins. In non-production environments those origins differ from the web origin (for
+// example the web app runs on :3001 while the backend API/Socket.IO server runs on :3000),
+// so a static `connect-src` of only `'self' https://*.pantrychef.com wss://*.pantrychef.com`
+// blocks every shopping-list sync call before it reaches the backend.
+//
+// The production PantryChef origins are always retained, so production remains restricted
+// to approved `*.pantrychef.com` API/WS origins. In addition, the backend origin actually
+// configured for this build is derived from the SAME env vars the app reads
+// (NEXT_PUBLIC_API_BASE_URL via BASE_URL, and NEXT_PUBLIC_WS_URL) and appended — both its
+// http(s) origin (for REST) and the matching ws(s) origin (for the Socket.IO upgrade).
+// Malformed/empty values are skipped defensively so a bad env var can never weaken the CSP.
+const buildConnectSrc = () => {
+  const sources = new Set([
+    "'self'",
+    'https://*.pantrychef.com',
+    'wss://*.pantrychef.com'
+  ]);
+
+  const addOrigin = (rawUrl) => {
+    if (!rawUrl) {
+      return;
+    }
+    try {
+      // `URL.origin` strips any path (e.g. '/api/v1'), leaving scheme://host[:port].
+      const { origin, protocol } = new URL(rawUrl);
+      sources.add(origin);
+      // Allow the corresponding WebSocket (or REST) sibling origin so both transports work.
+      if (protocol === 'https:') {
+        sources.add(origin.replace(/^https:/, 'wss:'));
+      } else if (protocol === 'http:') {
+        sources.add(origin.replace(/^http:/, 'ws:'));
+      } else if (protocol === 'wss:') {
+        sources.add(origin.replace(/^wss:/, 'https:'));
+      } else if (protocol === 'ws:') {
+        sources.add(origin.replace(/^ws:/, 'http:'));
+      }
+    } catch (_err) {
+      // Ignore malformed URLs — never broaden or break the CSP because of a bad env value.
+    }
+  };
+
+  addOrigin(BASE_URL);
+  addOrigin(process.env.NEXT_PUBLIC_WS_URL);
+
+  return Array.from(sources).join(' ');
+};
+
+const CONNECT_SRC = buildConnectSrc();
+
 /**
  * HUMAN TASKS:
  * 1. Configure CloudFront distribution and update NEXT_PUBLIC_CLOUDFRONT_DOMAIN
@@ -53,7 +105,7 @@ const nextConfig = {
                    "style-src 'self' 'unsafe-inline'; " +
                    "img-src 'self' data: https://*.pantrychef.com https://*.amazonaws.com; " +
                    "font-src 'self'; " +
-                   "connect-src 'self' https://*.pantrychef.com wss://*.pantrychef.com"
+                   "connect-src " + CONNECT_SRC
           },
           {
             key: 'X-Frame-Options',
