@@ -49,17 +49,31 @@ const createLogger = (): winston.Logger => {
         // runtime), so it preserves full type-checking of the constructor options without
         // triggering the eager AWS SDK load. winston-cloudwatch uses `export =`, so the type
         // query resolves to its constructor type.
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const WinstonCloudWatch = require('winston-cloudwatch') as typeof import('winston-cloudwatch');
-        transports.push(
-            new WinstonCloudWatch({
-                logGroupName: '/pantrychef/backend',
-                logStreamName: `${NODE_ENV}-${new Date().toISOString()}`,
-                awsRegion: process.env.AWS_REGION,
-                messageFormatter: ({ level, message, metadata }) =>
-                    JSON.stringify({ level, message, ...metadata })
-            })
-        );
+        //
+        // winston-cloudwatch eagerly require()s '@aws-sdk/client-cloudwatch-logs' at load time.
+        // If that AWS SDK dependency is absent (or the transport otherwise fails to construct),
+        // the process MUST NOT crash on startup — degrade gracefully to console-only logging.
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const WinstonCloudWatch = require('winston-cloudwatch') as typeof import('winston-cloudwatch');
+            transports.push(
+                new WinstonCloudWatch({
+                    logGroupName: '/pantrychef/backend',
+                    logStreamName: `${NODE_ENV}-${new Date().toISOString()}`,
+                    awsRegion: process.env.AWS_REGION,
+                    messageFormatter: ({ level, message, metadata }) =>
+                        JSON.stringify({ level, message, ...metadata })
+                })
+            );
+        } catch (error) {
+            // `logger` does not exist yet (we are inside its factory), so report via console.
+            // `console.warn` is permitted by the project's no-console rule configuration.
+            console.warn(
+                `CloudWatch logging disabled: failed to initialize the winston-cloudwatch transport (${
+                    error instanceof Error ? error.message : String(error)
+                }). Continuing with console logging.`
+            );
+        }
     }
 
     return winston.createLogger({

@@ -201,12 +201,18 @@ export const handleShutdown = async (): Promise<void> => {
 // Export application instance for testing
 export const app = express();
 
-// Start server if not in test environment
-if (process.env.NODE_ENV !== 'test') {
+// Auto-start the application ONLY when this module is executed directly
+// (e.g. `node dist/app.js`), and never under the test runner. The combined
+// entrypoint `server.js` imports this module to reuse `initializeApp` /
+// `startServer`; without the `require.main === module` guard that import would
+// trigger a second, un-clustered boot in addition to server.js's own worker
+// boot (double-listen on the same port). The guard makes app.js independently
+// runnable while keeping server.js the single source of process orchestration.
+if (process.env.NODE_ENV !== 'test' && require.main === module) {
     (async () => {
         try {
-            const app = await initializeApp();
-            await startServer(app);
+            const application = await initializeApp();
+            await startServer(application);
         } catch (error) {
             console.error('Failed to start application:', error);
             process.exit(1);
