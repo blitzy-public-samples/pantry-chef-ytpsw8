@@ -9,7 +9,7 @@
  * 5. Configure role-based access control matrix for recipe operations
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { RecipeController } from '../controllers/recipe.controller';
 // RecipeService is a plain (non-tsyringe) class whose constructor requires its
 // collaborators, so the controller's dependency tree is composed manually here
@@ -21,7 +21,7 @@ import { RecipeService } from '../../services/recipe.service';
 import { SearchService } from '../../services/search.service';
 import { CacheService } from '../../services/cache.service';
 import { QueueService } from '../../services/queue.service';
-import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { authenticate, authorize, AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { rateLimiterMiddleware, recipeMatchLimiter } from '../middlewares/rateLimiter.middleware';
 import {
     validateCreateRecipe,
@@ -37,6 +37,20 @@ import {
  * - Recipe Sharing (1.2 Scope/Core Capabilities)
  * - Security Architecture (5.6 Security Architecture/Application)
  */
+/**
+ * Synchronous, void-returning wrappers around the auth middlewares. `authenticate` and the
+ * middleware produced by `authorize(...)` are typed against `AuthenticatedRequest` and return a
+ * Promise; Express's `RequestHandler` expects a plain `Request` (contravariant position) and a
+ * `void` return. These wrappers upcast the request and discard the promise so the middlewares
+ * satisfy the route-registration overloads without a floating rejection.
+ */
+const authGuard = (req: Request, res: Response, next: NextFunction): void => {
+    void authenticate(req as AuthenticatedRequest, res, next);
+};
+const requireRoles = (roles: string[]) => (req: Request, res: Response, next: NextFunction): void => {
+    void authorize(roles)(req as AuthenticatedRequest, res, next);
+};
+
 export class RecipeRouter {
     private router: Router;
     private recipeController: RecipeController;
@@ -56,8 +70,8 @@ export class RecipeRouter {
         // Create new recipe (protected, requires user/admin role)
         this.router.post(
             '/',
-            authenticate,
-            authorize(['user', 'admin']),
+            authGuard,
+            requireRoles(['user', 'admin']),
             validateCreateRecipe(),
             rateLimiterMiddleware({
                 points: 10,
@@ -81,8 +95,8 @@ export class RecipeRouter {
         // Update recipe (protected, requires user/admin role)
         this.router.put(
             '/:id',
-            authenticate,
-            authorize(['user', 'admin']),
+            authGuard,
+            requireRoles(['user', 'admin']),
             validateUpdateRecipe(),
             rateLimiterMiddleware({
                 points: 20,
@@ -95,8 +109,8 @@ export class RecipeRouter {
         // Delete recipe (protected, requires user/admin role)
         this.router.delete(
             '/:id',
-            authenticate,
-            authorize(['user', 'admin']),
+            authGuard,
+            requireRoles(['user', 'admin']),
             rateLimiterMiddleware({
                 points: 10,
                 duration: 3600,
@@ -120,7 +134,7 @@ export class RecipeRouter {
         // Find recipes by ingredients (protected, rate limited)
         this.router.post(
             '/match',
-            authenticate,
+            authGuard,
             recipeMatchLimiter,
             this.recipeController.findRecipesByIngredients.bind(this.recipeController)
         );

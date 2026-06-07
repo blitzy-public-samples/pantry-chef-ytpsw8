@@ -31,7 +31,9 @@ const configureMulter = (): multer.Multer => {
 
     const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
         const ext = path.extname(file.originalname).toLowerCase();
-        if (STORAGE_CONSTANTS.ALLOWED_FILE_TYPES.includes(ext)) {
+        // ALLOWED_FILE_TYPES is a readonly tuple of literal extensions; widen to
+        // string[] for the membership check against the runtime-derived extension.
+        if ((STORAGE_CONSTANTS.ALLOWED_FILE_TYPES as readonly string[]).includes(ext)) {
             cb(null, true);
         } else {
             cb(new ValidationError('Invalid file type', [{

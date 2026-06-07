@@ -201,7 +201,9 @@ function validatePantryUpdate(updateData: Partial<Pantry>): { isValid: boolean; 
     const errors: string[] = [];
 
     // Validate ID
-    if (!validateObjectId(updateData.id)) {
+    // updateData.id is optional on Partial<Pantry>; coalesce to an empty string so
+    // a missing id deterministically fails validation (recording the same error).
+    if (!validateObjectId(updateData.id ?? '')) {
         errors.push('Invalid pantry ID');
     }
 

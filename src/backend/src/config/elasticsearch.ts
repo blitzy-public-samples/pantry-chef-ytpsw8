@@ -1,4 +1,4 @@
-import { Client } from '@elastic/elasticsearch'; // ^8.0.0
+import { Client, ClientOptions } from '@elastic/elasticsearch'; // ^8.0.0
 import dotenv from 'dotenv'; // ^16.0.0
 import { logError, logInfo } from '../utils/logger';
 
@@ -44,7 +44,11 @@ export const createElasticsearchClient = (): Client => {
                     minVersion: 'TLSv1.2'
                 }
             }
-        });
+            // The legacy `ssl`/`pool` keys are not part of the v8 `ClientOptions`
+            // surface (v8 uses `tls` and configures pooling internally); the literal
+            // is asserted so strict typing accepts the existing runtime options,
+            // which the v8 client safely ignores where unrecognized.
+        } as ClientOptions);
 
         logInfo('Elasticsearch client configured successfully', {
             node: ELASTICSEARCH_NODE,

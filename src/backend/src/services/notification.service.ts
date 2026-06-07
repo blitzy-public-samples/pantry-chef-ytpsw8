@@ -3,9 +3,9 @@ import { Server } from 'socket.io'; // ^4.6.0
 import * as admin from 'firebase-admin'; // ^11.0.0
 import nodemailer, { Transporter } from 'nodemailer'; // ^6.9.0
 import { Channel } from 'amqplib'; // ^0.10.0
-import { NotificationSettings, UserPreferences } from '../interfaces/user.interface';
+import { NotificationSettings, UserPreferences, Theme, MeasurementSystem, SkillLevel } from '../interfaces/user.interface';
 import { logger } from '../utils/logger';
-import { createChannel } from '../config/rabbitmq';
+import { createChannel, createConnection } from '../config/rabbitmq';
 
 // HUMAN TASKS:
 // 1. Configure Firebase Admin SDK credentials in environment:
@@ -23,14 +23,17 @@ import { createChannel } from '../config/rabbitmq';
  */
 @injectable()
 export class NotificationService {
-    private rabbitmqChannel: Channel;
-    private firebaseApp: admin.app.App;
+    // Initialized asynchronously in `initialize()` (invoked fire-and-forget from the
+    // constructor); definite-assignment assertions reflect post-construction
+    // assignment without altering the init flow.
+    private rabbitmqChannel!: Channel;
+    private firebaseApp!: admin.app.App;
     // Optional: only the WebSocket process binds a live Socket.IO Server (socket.ts constructs
     // `new NotificationService(this.io)`). The HTTP dependency-injection graph resolves this
     // service WITHOUT a server (see the module-scope container registration at the end of this
     // file), and the notification worker constructs it as `new NotificationService(undefined)`.
     private socketServer?: Server;
-    private emailTransporter: Transporter;
+    private emailTransporter!: Transporter;
     private readonly NOTIFICATION_QUEUE = process.env.NOTIFICATION_QUEUE || 'notifications';
 
     /**
@@ -63,18 +66,21 @@ export class NotificationService {
             // per controller resolved through tsyringe, plus the explicit instance created by the
             // WebSocket server), so guard against re-initializing the default app, which would
             // otherwise throw an "app/duplicate-app" error on every subsequent construction.
-            const firebaseCredentials = JSON.parse(process.env.FIREBASE_CREDENTIALS);
+            const firebaseCredentials = JSON.parse(process.env.FIREBASE_CREDENTIALS ?? '');
             this.firebaseApp = admin.apps.length > 0
                 ? admin.app()
                 : admin.initializeApp({
                     credential: admin.credential.cert(firebaseCredentials)
                 });
 
-            // Initialize RabbitMQ channel
-            this.rabbitmqChannel = await createChannel(await createChannel(undefined));
+            // Initialize RabbitMQ channel from a freshly opened connection, matching
+            // the connection→channel pattern used by the queue service. (The prior
+            // nested `createChannel(createChannel(undefined))` passed a Channel where
+            // a connection ChannelModel is required and could not type-check.)
+            this.rabbitmqChannel = await createChannel(await createConnection());
 
             // Initialize SMTP transport
-            const smtpConfig = JSON.parse(process.env.SMTP_CONFIG);
+            const smtpConfig = JSON.parse(process.env.SMTP_CONFIG ?? '');
             this.emailTransporter = nodemailer.createTransport(smtpConfig);
 
             // Start notification queue processor
@@ -318,9 +324,9 @@ export class NotificationService {
         // Implementation would fetch user preferences from database
         // Placeholder for demonstration
         return {
-            theme: 'LIGHT',
+            theme: Theme.LIGHT,
             language: 'en',
-            measurementSystem: 'METRIC',
+            measurementSystem: MeasurementSystem.METRIC,
             notificationSettings: {
                 expirationAlerts: true,
                 lowStockAlerts: true,
@@ -329,7 +335,7 @@ export class NotificationService {
                 pushNotifications: true
             },
             cuisinePreferences: [],
-            skillLevel: 'INTERMEDIATE'
+            skillLevel: SkillLevel.INTERMEDIATE
         };
     }
 

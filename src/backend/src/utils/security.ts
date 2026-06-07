@@ -54,7 +54,7 @@ export async function hashPassword(password: string): Promise<string> {
       'Password hashing failed',
       500,
       'ERR_PASSWORD_HASH',
-      { error: error.message }
+      { error: error instanceof Error ? error.message : String(error) }
     );
   }
 }
@@ -74,7 +74,7 @@ export async function comparePassword(
       'Password comparison failed',
       500,
       'ERR_PASSWORD_COMPARE',
-      { error: error.message }
+      { error: error instanceof Error ? error.message : String(error) }
     );
   }
 }
@@ -92,17 +92,18 @@ export async function encryptData(
     
     // Generate data key using KMS
     const { Plaintext: keyBuffer } = await kmsClient.generateDataKey({
-      KeyId: process.env.AWS_KMS_KEY_ID,
+      KeyId: process.env.AWS_KMS_KEY_ID ?? '',
       KeySpec: 'AES_256'
     }).promise();
 
     // Generate random IV
     const iv = crypto.randomBytes(options.ivLength);
     
-    // Create cipher using key and IV
+    // Create cipher using key and IV. The KMS plaintext key is a Buffer at runtime;
+    // it is narrowed to crypto.CipherKey for the strict createCipheriv key parameter.
     const cipher = crypto.createCipheriv(
       options.algorithm,
-      keyBuffer,
+      keyBuffer as crypto.CipherKey,
       iv
     );
     
@@ -110,8 +111,10 @@ export async function encryptData(
     let encryptedData = cipher.update(data, 'utf8', 'base64');
     encryptedData += cipher.final('base64');
     
-    // Get authentication tag
-    const authTag = cipher.getAuthTag();
+    // Get authentication tag. `createCipheriv` is typed to the generic `Cipher` when the
+    // algorithm is a string; GCM mode exposes `getAuthTag()` on `CipherGCM`, so the cipher
+    // is narrowed to `CipherGCM` (the configured algorithm is AES-256-GCM).
+    const authTag = (cipher as crypto.CipherGCM).getAuthTag();
     
     // Combine IV, encrypted data, and auth tag
     const combined = Buffer.concat([
@@ -126,7 +129,7 @@ export async function encryptData(
       'Data encryption failed',
       500,
       'ERR_ENCRYPTION',
-      { error: error.message }
+      { error: error instanceof Error ? error.message : String(error) }
     );
   }
 }
@@ -157,13 +160,16 @@ export async function decryptData(
       KeyId: process.env.AWS_KMS_KEY_ID
     }).promise();
     
-    // Create decipher
+    // Create decipher. The KMS plaintext key is a Buffer at runtime; it is narrowed to
+    // crypto.CipherKey for the strict createDecipheriv key parameter.
     const decipher = crypto.createDecipheriv(
       options.algorithm,
-      keyBuffer,
+      keyBuffer as crypto.CipherKey,
       iv
     );
-    decipher.setAuthTag(authTag);
+    // GCM mode exposes `setAuthTag()` on `DecipherGCM`; narrow from the generic `Decipher`
+    // returned by `createDecipheriv` with a string algorithm.
+    (decipher as crypto.DecipherGCM).setAuthTag(authTag);
     
     // Decrypt data
     let decryptedData = decipher.update(data.toString('base64'), 'base64', 'utf8');
@@ -175,7 +181,7 @@ export async function decryptData(
       'Data decryption failed',
       500,
       'ERR_DECRYPTION',
-      { error: error.message }
+      { error: error instanceof Error ? error.message : String(error) }
     );
   }
 }
@@ -211,7 +217,7 @@ export async function generateToken(payload: TokenPayload): Promise<string> {
       'Token generation failed',
       500,
       'ERR_TOKEN_GENERATION',
-      { error: error.message }
+      { error: error instanceof Error ? error.message : String(error) }
     );
   }
 }
@@ -262,7 +268,7 @@ export async function verifyToken(token: string): Promise<TokenPayload> {
       'Token verification failed',
       500,
       'ERR_TOKEN_VERIFICATION',
-      { error: error.message }
+      { error: error instanceof Error ? error.message : String(error) }
     );
   }
 }

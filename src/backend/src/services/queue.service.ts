@@ -1,4 +1,4 @@
-import { Connection, Channel } from 'amqplib'; // ^0.10.0
+import { ChannelModel, Channel } from 'amqplib'; // ^0.10.0
 import { createConnection, createChannel, setupQueues } from '../config/rabbitmq';
 import { QUEUE_CONSTANTS } from '../utils/constants';
 import logger from '../utils/logger';
@@ -15,7 +15,7 @@ import logger from '../utils/logger';
 // 5. Configure CloudWatch metrics for queue monitoring
 
 // Global connection and channel instances
-let connection: Connection | null = null;
+let connection: ChannelModel | null = null;
 let channel: Channel | null = null;
 
 /**
@@ -54,7 +54,7 @@ export class QueueService {
     public static async publishToQueue(queueName: string, data: object): Promise<boolean> {
         try {
             // Validate queue name
-            if (!Object.values(QUEUE_CONSTANTS).includes(queueName)) {
+            if (!(Object.values(QUEUE_CONSTANTS) as string[]).includes(queueName)) {
                 throw new Error(`Invalid queue name: ${queueName}`);
             }
 
@@ -104,7 +104,7 @@ export class QueueService {
     ): Promise<void> {
         try {
             // Validate queue name
-            if (!Object.values(QUEUE_CONSTANTS).includes(queueName)) {
+            if (!(Object.values(QUEUE_CONSTANTS) as string[]).includes(queueName)) {
                 throw new Error(`Invalid queue name: ${queueName}`);
             }
 

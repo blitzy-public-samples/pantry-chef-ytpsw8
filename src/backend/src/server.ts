@@ -130,8 +130,8 @@ async function startMaster(): Promise<void> {
 
     } catch (error) {
         logger.error('Failed to start master process', {
-            error: error.message,
-            stack: error.stack,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
             pid: process.pid
         });
         process.exit(1);
@@ -147,8 +147,8 @@ function handleProcessSignals(): void {
     // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {
         logger.error('Uncaught exception', {
-            error: error.message,
-            stack: error.stack,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
             pid: process.pid
         });
         process.exit(1);
@@ -168,8 +168,8 @@ if (cluster.isMaster) {
     // Start master process
     startMaster().catch((error) => {
         logger.error('Failed to start master process', {
-            error: error.message,
-            stack: error.stack
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
         });
         process.exit(1);
     });
@@ -178,8 +178,8 @@ if (cluster.isMaster) {
     handleProcessSignals();
     startWorker().catch((error) => {
         logger.error('Failed to start worker process', {
-            error: error.message,
-            stack: error.stack
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
         });
         process.exit(1);
     });

@@ -15,11 +15,15 @@ import { validateRecipe } from '../utils/validators';
 
 // Requirement: Recipe Management - Smart recipe matching based on available ingredients
 const recipeIngredientSchema = new mongoose.Schema<RecipeIngredient>({
+    // ObjectId reference persisted at runtime (enables `ref` population) while the
+    // shared `RecipeIngredient` interface types `ingredientId` as a string id. Cast
+    // the field definition to satisfy the typed-schema generic without altering the
+    // stored BSON type or populate behavior.
     ingredientId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Ingredient',
         required: true
-    },
+    } as unknown as mongoose.SchemaDefinitionProperty<string>,
     quantity: {
         type: Number,
         required: true,
@@ -80,11 +84,13 @@ const nutritionalInfoSchema = new mongoose.Schema<RecipeNutritionalInfo>({
 
 // Requirement: Recipe Sharing - Social recipe sharing and community features
 const recipeRatingSchema = new mongoose.Schema<RecipeRating>({
+    // ObjectId reference persisted at runtime (enables `ref` population) while the
+    // shared `RecipeRating` interface types `userId` as a string id.
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
-    },
+    } as unknown as mongoose.SchemaDefinitionProperty<string>,
     rating: {
         type: Number,
         required: true,
@@ -110,11 +116,13 @@ const recipeSchema = new mongoose.Schema<Recipe>({
         type: String,
         required: true
     },
+    // ObjectId reference persisted at runtime (enables `ref` population) while the
+    // shared `Recipe` interface types `authorId` as a string id.
     authorId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
-    },
+    } as unknown as mongoose.SchemaDefinitionProperty<string>,
     ingredients: [recipeIngredientSchema],
     instructions: [cookingStepSchema],
     prepTime: {
@@ -165,7 +173,7 @@ const recipeSchema = new mongoose.Schema<Recipe>({
 });
 
 // Requirement: Recipe Management - Data validation and sanitization
-recipeSchema.pre('save', async function(next) {
+recipeSchema.pre('save', async function(this: mongoose.HydratedDocument<Recipe>, next) {
     // Validate complete recipe data
     const validationResult = validateRecipe(this);
     if (!validationResult.isValid) {
@@ -195,21 +203,28 @@ recipeSchema.statics.findByIngredients = async function(
 ): Promise<Recipe[]> {
     const MINIMUM_MATCH_THRESHOLD = 0.5; // 50% ingredient match required
 
-    // Find recipes containing any of the given ingredients
-    const recipes = await this.find({
+    // Find recipes containing any of the given ingredients. Annotate the result
+    // as `Recipe[]` so the downstream map/filter/sort callbacks are strongly
+    // typed (the Model static `this` is untyped, so `find()` would otherwise
+    // surface as `any` and propagate noImplicitAny errors through the chain).
+    const recipes: Recipe[] = await this.find({
         'ingredients.ingredientId': { $in: ingredientIds }
     }).populate('ingredients.ingredientId');
 
-    // Calculate match percentage for each recipe
-    const recipesWithScore = recipes.map(recipe => {
+    // Calculate match percentage for each recipe. `recipes` originates from an
+    // untyped Model static `this`, so annotate the element/inner callback params
+    // explicitly to satisfy noImplicitAny; this is type-only and does not change
+    // the matching arithmetic.
+    const recipesWithScore = recipes.map((recipe: Recipe) => {
         const matchedIngredients = recipe.ingredients.filter(
-            ingredient => ingredientIds.includes(ingredient.ingredientId.toString())
+            (ingredient: RecipeIngredient) => ingredientIds.includes(ingredient.ingredientId.toString())
         );
         const matchPercentage = matchedIngredients.length / recipe.ingredients.length;
         return { recipe, matchPercentage };
     });
 
-    // Filter recipes meeting minimum threshold and sort by match percentage
+    // Filter recipes meeting minimum threshold and sort by match percentage.
+    // `recipesWithScore` is now strongly typed, so the destructured params infer.
     return recipesWithScore
         .filter(({ matchPercentage }) => matchPercentage >= MINIMUM_MATCH_THRESHOLD)
         .sort((a, b) => b.matchPercentage - a.matchPercentage)

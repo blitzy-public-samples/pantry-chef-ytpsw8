@@ -1,6 +1,6 @@
 // @ts-check
 import express, { Router, Request, Response, NextFunction } from 'express'; // ^4.18.0
-import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { authenticate, authorize, AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { validateRequest } from '../middlewares/validation.middleware';
 import { 
     UserActivityMetrics, 
@@ -22,14 +22,28 @@ HUMAN TASKS:
  * Initialize analytics routes with authentication and validation
  * Requirement: Analytics and Reporting - Implementation of analytics microservice endpoints
  */
+/**
+ * Synchronous, void-returning wrappers around the auth middlewares. `authenticate` and the
+ * middleware returned by `authorize(...)` are typed against `AuthenticatedRequest` and return a
+ * Promise; Express's `RequestHandler` expects a plain `Request` (contravariant position) and a
+ * `void` return. These wrappers upcast the request and discard the promise so the middlewares
+ * satisfy the route-registration overloads without a floating rejection.
+ */
+const authGuard = (req: Request, res: Response, next: NextFunction): void => {
+    void authenticate(req as AuthenticatedRequest, res, next);
+};
+const requireRoles = (roles: string[]) => (req: Request, res: Response, next: NextFunction): void => {
+    void authorize(roles)(req as AuthenticatedRequest, res, next);
+};
+
 function initializeAnalyticsRoutes(): Router {
     const router = express.Router();
 
     // User activity metrics endpoint
     // Requirement: Usage Tracking - Routes for analytics service functionality
     router.get('/user-activity',
-        authenticate,
-        authorize(['admin']),
+        authGuard,
+        requireRoles(['admin']),
         validateRequest,
         async (req: Request, res: Response, next: NextFunction) => {
             try {
@@ -51,8 +65,8 @@ function initializeAnalyticsRoutes(): Router {
     // System performance metrics endpoint
     // Requirement: System Metrics - API routes for tracking performance metrics
     router.get('/system-performance',
-        authenticate,
-        authorize(['admin']),
+        authGuard,
+        requireRoles(['admin']),
         validateRequest,
         async (req: Request, res: Response, next: NextFunction) => {
             try {
@@ -83,8 +97,8 @@ function initializeAnalyticsRoutes(): Router {
     // Recipe analytics endpoint
     // Requirement: Analytics and Reporting - Comprehensive system monitoring
     router.get('/recipe-analytics',
-        authenticate,
-        authorize(['admin']),
+        authGuard,
+        requireRoles(['admin']),
         validateRequest,
         async (req: Request, res: Response, next: NextFunction) => {
             try {

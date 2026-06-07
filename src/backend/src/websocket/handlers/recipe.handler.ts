@@ -11,6 +11,7 @@
 import { Socket } from 'socket.io';
 import { Recipe } from '../../interfaces/recipe.interface';
 import { RecipeService } from '../../services/recipe.service';
+import { SearchFilters } from '../../services/search.service';
 import { logger } from '../../utils/logger';
 
 /**
@@ -116,10 +117,25 @@ export class RecipeHandler {
                 socketId: socket.id
             });
 
+            // Build a complete SearchFilters from the optional client-provided
+            // subset. Unset values mirror the SearchService destructure defaults
+            // (empty arrays => no facet filter; 0 time caps => no range filter,
+            // since the query guards on truthiness; first page at the default
+            // page size), preserving the prior behavior where omitted fields fell
+            // through to those defaults.
+            const filters: SearchFilters = {
+                cuisine: options.filters?.cuisine ?? [],
+                difficulty: options.filters?.difficulty ?? [],
+                maxPrepTime: options.filters?.maxPrepTime ?? 0,
+                maxCookTime: 0,
+                page: 1,
+                pageSize: 20
+            };
+
             // Search recipes with optimization
             const searchResults = await this.recipeService.searchRecipes(
                 options.query || '',
-                options.filters || {}
+                filters
             );
 
             const responseTime = Date.now() - startTime;
@@ -135,7 +151,10 @@ export class RecipeHandler {
             // Emit recommendations to client
             socket.emit('recipe:recommendations', {
                 success: true,
-                data: searchResults.hits,
+                // SearchResult exposes the matched documents on `items`; the prior
+                // `hits` field never existed on the type and always emitted
+                // undefined. Emit the actual result array.
+                data: searchResults.items,
                 total: searchResults.total,
                 responseTime
             });

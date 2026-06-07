@@ -30,7 +30,7 @@ interface LoginCredentials {
  * Interface for new user registration data
  * Requirement: User Authentication - Comprehensive registration data
  */
-interface RegisterData {
+export interface RegisterData {
   email: string;
   password: string;
   firstName: string;
@@ -102,7 +102,7 @@ export class AuthService {
       if (error instanceof AppError) throw error;
       throw CommonErrors.InternalServerError({
         context: 'Login failed',
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   }
@@ -140,12 +140,15 @@ export class AuthService {
 
       // Return user without sensitive data
       const { passwordHash, ...userWithoutPassword } = user.toObject();
-      return userWithoutPassword as User;
+      // The destructured rest object omits `passwordHash`, so it no longer
+      // structurally matches `User`; convert via `unknown` (as TS suggests) to
+      // return the sanitized shape under the declared return type.
+      return userWithoutPassword as unknown as User;
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw CommonErrors.InternalServerError({
         context: 'Registration failed',
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   }
@@ -182,7 +185,7 @@ export class AuthService {
       if (error instanceof AppError) throw error;
       throw CommonErrors.InternalServerError({
         context: 'Token refresh failed',
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   }
@@ -197,7 +200,7 @@ export class AuthService {
     try {
       // Verify token signature and expiration
       const decoded = jwt.verify(token, this.jwtConfig.secret, {
-        algorithms: this.jwtConfig.allowedAlgorithms
+        algorithms: this.jwtConfig.allowedAlgorithms as jwt.Algorithm[]
       });
 
       // Verify token payload
@@ -224,7 +227,7 @@ export class AuthService {
       this.jwtConfig.secret,
       {
         algorithm: this.jwtConfig.algorithm as jwt.Algorithm,
-        expiresIn: this.jwtConfig.expiresIn
+        expiresIn: this.jwtConfig.expiresIn as jwt.SignOptions['expiresIn']
       }
     );
 
@@ -234,7 +237,7 @@ export class AuthService {
       this.jwtConfig.secret,
       {
         algorithm: this.jwtConfig.algorithm as jwt.Algorithm,
-        expiresIn: this.jwtConfig.refreshExpiresIn
+        expiresIn: this.jwtConfig.refreshExpiresIn as jwt.SignOptions['expiresIn']
       }
     );
 

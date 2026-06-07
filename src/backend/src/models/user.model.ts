@@ -42,8 +42,24 @@ const comparePassword = async function(this: any, candidatePassword: string): Pr
   }
 };
 
+/**
+ * Instance methods exposed on hydrated User documents.
+ *
+ * `comparePassword` is attached at runtime via `UserSchema.methods.comparePassword`
+ * (below). Declaring it here and threading it through the schema/model generics so
+ * that `UserModel.findOne(...)` results are typed with the method, which the auth
+ * flows in `user.service.ts` and `auth.service.ts` rely on. Type-only — does not
+ * change the runtime method binding.
+ */
+interface UserMethods {
+  comparePassword(candidatePassword: string): Promise<boolean>;
+}
+
+// Model type carrying the instance-method definitions for hydrated documents.
+type UserModelType = Model<User, Record<string, never>, UserMethods>;
+
 // Addresses requirement: User Profile Management - Comprehensive user data structure
-const UserSchema = new Schema<User>({
+const UserSchema = new Schema<User, UserModelType, UserMethods>({
   email: {
     type: String,
     required: true,
@@ -133,22 +149,25 @@ const UserSchema = new Schema<User>({
     }],
     default: []
   },
-  // References to saved recipes
+  // References to saved recipes. Persisted as ObjectId[] at runtime (for `ref`
+  // population) while the shared `User` interface types `savedRecipes` as string[];
+  // cast keeps the stored BSON type and populate behavior unchanged.
   savedRecipes: {
     type: [{
       type: Schema.Types.ObjectId,
       ref: 'Recipe'
     }],
     default: []
-  },
-  // References to user's pantries
+  } as unknown as mongoose.SchemaDefinitionProperty<string[]>,
+  // References to user's pantries. Persisted as ObjectId[] at runtime (for `ref`
+  // population) while the shared `User` interface types `pantryIds` as string[].
   pantryIds: {
     type: [{
       type: Schema.Types.ObjectId,
       ref: 'Pantry'
     }],
     default: []
-  },
+  } as unknown as mongoose.SchemaDefinitionProperty<string[]>,
   lastLogin: {
     type: Date,
     default: null
@@ -174,6 +193,6 @@ UserSchema.pre('save', hashPassword);
 UserSchema.methods.comparePassword = comparePassword;
 
 // Create and export the User model
-const UserModel: Model<User> = mongoose.model<User>('User', UserSchema);
+const UserModel: UserModelType = mongoose.model<User, UserModelType>('User', UserSchema);
 
 export default UserModel;

@@ -63,7 +63,7 @@ const optimizeImage = async (imageBuffer: Buffer): Promise<Buffer> => {
             'Failed to optimize image',
             500,
             'IMAGE_OPTIMIZATION_ERROR',
-            { error: error.message }
+            { error: error instanceof Error ? error.message : String(error) }
         );
     }
 };
@@ -175,7 +175,7 @@ export const uploadMiddleware = async (
             'Upload middleware failed',
             500,
             'UPLOAD_MIDDLEWARE_ERROR',
-            { error: error.message }
+            { error: error instanceof Error ? error.message : String(error) }
         ));
     }
 };

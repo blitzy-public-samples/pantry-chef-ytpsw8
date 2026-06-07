@@ -43,7 +43,10 @@ interface RecognitionResult {
  * - S3 integration for image storage
  */
 export class ImageService {
-    private model: tf.LayersModel;
+    // Loaded asynchronously in `loadModel()` (invoked from the constructor), so it
+    // is assigned after construction; the definite-assignment assertion reflects
+    // that without changing the load flow.
+    private model!: tf.LayersModel;
     private readonly confidenceThreshold: number;
     private readonly imageProcessor: sharp.Sharp;
 
@@ -64,12 +67,12 @@ export class ImageService {
             logger.info('TensorFlow model loaded successfully');
         } catch (error) {
             logger.error('Failed to load TensorFlow model', {
-                error: error.message,
-                stack: error.stack
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined
             });
             throw CommonErrors.ImageProcessingError({
                 context: 'model_initialization',
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
         }
     }
@@ -91,7 +94,9 @@ export class ImageService {
             const processedImage = await this.preprocessImage(imageBuffer);
             
             // Run ingredient recognition
-            const tensor = tf.node.decodeImage(processedImage, 3);
+            // Decoding with 3 channels yields a rank-3 tensor at runtime; the typed
+            // return is the `Tensor3D | Tensor4D` union, so narrow to `Tensor3D`.
+            const tensor = tf.node.decodeImage(processedImage, 3) as tf.Tensor3D;
             const predictions = await this.recognizeIngredients(tensor);
             
             // Upload processed image to S3
@@ -111,13 +116,13 @@ export class ImageService {
             };
         } catch (error) {
             logger.error('Image processing failed', {
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 fileName
             });
             throw CommonErrors.ImageProcessingError({
                 context: 'image_processing',
                 fileName,
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
         }
     }
@@ -140,11 +145,11 @@ export class ImageService {
                 .toBuffer();
         } catch (error) {
             logger.error('Image preprocessing failed', {
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
             throw CommonErrors.ImageProcessingError({
                 context: 'preprocessing',
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
         }
     }
@@ -168,7 +173,9 @@ export class ImageService {
 
             // Run inference
             const predictions = await this.model.predict(normalizedImage) as tf.Tensor;
-            const results = await predictions.array();
+            // A batched 2-D model output; `Tensor.array()` widens to the recursive
+            // numeric-array union, so narrow to `number[][]` to index the batch.
+            const results = await predictions.array() as number[][];
 
             // Clean up tensors
             batchedImage.dispose();
@@ -179,11 +186,11 @@ export class ImageService {
             return this.processRecognitionResults(results[0]);
         } catch (error) {
             logger.error('Ingredient recognition failed', {
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
             throw CommonErrors.ImageProcessingError({
                 context: 'recognition',
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
         }
     }
@@ -241,12 +248,12 @@ export class ImageService {
             return `https://${S3_BUCKET}.s3.amazonaws.com/${key}`;
         } catch (error) {
             logger.error('S3 upload failed', {
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 fileName: originalFileName
             });
             throw CommonErrors.ImageProcessingError({
                 context: 's3_upload',
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
         }
     }

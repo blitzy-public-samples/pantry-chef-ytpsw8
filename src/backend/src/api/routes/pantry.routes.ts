@@ -7,9 +7,9 @@
  * 5. Set up validation error tracking in monitoring system
  */
 
-import { Router } from 'express'; // ^4.17.1
+import { Router, Request, Response, NextFunction } from 'express'; // ^4.17.1
 import { PantryController } from '../controllers/pantry.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authenticate, AuthenticatedRequest } from '../middlewares/auth.middleware';
 import {
     createPantryValidation,
     updatePantryValidation,
@@ -31,8 +31,13 @@ import { container } from 'tsyringe';
 const router = Router();
 const pantryController = container.resolve(PantryController);
 
-// Apply authentication middleware to protect all pantry routes
-router.use(authenticate);
+// Apply authentication middleware to protect all pantry routes.
+// `authenticate` is typed against `AuthenticatedRequest` and returns a Promise; wrap it in a
+// synchronous void-returning middleware (upcasting the request) to satisfy Express's
+// RequestHandler contract and discard the promise without a floating rejection.
+router.use((req: Request, res: Response, next: NextFunction): void => {
+    void authenticate(req as AuthenticatedRequest, res, next);
+});
 
 /**
  * POST /api/pantry/create
@@ -42,7 +47,7 @@ router.use(authenticate);
 router.post(
     '/create',
     createPantryValidation,
-    (req, res) => pantryController.createPantry(req, res)
+    (req: Request, res: Response) => void pantryController.createPantry(req, res)
 );
 
 /**
@@ -65,7 +70,7 @@ router.get(
 router.post(
     '/items',
     addItemValidation,
-    (req, res) => pantryController.addItem(req, res)
+    (req: Request, res: Response) => void pantryController.addItem(req, res)
 );
 
 /**
@@ -86,7 +91,7 @@ router.delete(
 router.put(
     '/items/:id',
     updateItemValidation,
-    (req, res) => pantryController.updateItemQuantity(req, res)
+    (req: Request, res: Response) => void pantryController.updateItemQuantity(req, res)
 );
 
 /**

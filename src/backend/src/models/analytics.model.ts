@@ -1,6 +1,6 @@
 // @version mongoose ^6.0.0
 
-import { Schema, model, Model } from 'mongoose';
+import { Schema, model, Model, SchemaDefinitionProperty } from 'mongoose';
 import {
     UserActivityMetrics,
     SystemPerformanceMetrics,
@@ -19,12 +19,14 @@ import {
 
 // Addresses requirement: Usage Tracking - Analytics Service for monitoring user engagement
 const UserActivitySchema = new Schema<UserActivityMetrics>({
+    // ObjectId reference persisted at runtime (for `ref` population) while the
+    // `UserActivityMetrics` interface types `userId` as a string id.
     userId: {
         type: Schema.Types.ObjectId,
         required: true,
         ref: 'User',
         index: true
-    },
+    } as unknown as SchemaDefinitionProperty<string>,
     recipeViews: {
         type: Number,
         required: true,
@@ -111,12 +113,14 @@ const SystemPerformanceSchema = new Schema<SystemPerformanceMetrics>({
 
 // Addresses requirement: Analytics and Reporting - Tracking system metrics and user behavior
 const RecipeAnalyticsSchema = new Schema<RecipeAnalytics>({
+    // ObjectId reference persisted at runtime (for `ref` population) while the
+    // `RecipeAnalytics` interface types `recipeId` as a string id.
     recipeId: {
         type: Schema.Types.ObjectId,
         required: true,
         ref: 'Recipe',
         index: true
-    },
+    } as unknown as SchemaDefinitionProperty<string>,
     viewCount: {
         type: Number,
         required: true,

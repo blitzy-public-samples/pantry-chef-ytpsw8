@@ -3,9 +3,8 @@
 
 import { Request, Response, NextFunction } from 'express';
 import httpStatus from 'http-status';
-import { AuthService } from '../../services/auth.service';
+import { AuthService, RegisterData } from '../../services/auth.service';
 import { validateLoginRequest, validateSignupRequest, validatePasswordResetRequest } from '../validators/auth.validator';
-import { User } from '../../interfaces/user.interface';
 
 /**
  * HUMAN TASKS:
@@ -71,13 +70,16 @@ export class AuthController {
             // Apply registration request validation
             await validateSignupRequest(req, res, next);
 
-            const userData: Partial<User> = {
+            // Build the registration payload against the service's RegisterData
+            // contract. This is the authoritative shape consumed by
+            // AuthService.register; it intentionally omits dietaryRestrictions,
+            // which the service does not read at registration time.
+            const userData: RegisterData = {
                 email: req.body.email,
                 password: req.body.password,
                 firstName: req.body.firstName,
                 lastName: req.body.lastName,
-                preferences: req.body.preferences,
-                dietaryRestrictions: req.body.dietaryRestrictions
+                preferences: req.body.preferences
             };
 
             // Create new user account

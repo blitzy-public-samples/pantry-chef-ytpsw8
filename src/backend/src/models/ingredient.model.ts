@@ -14,8 +14,15 @@ import {
  * 3. Monitor the performance of text search operations on large datasets
  */
 
-// Extend Document for Mongoose typing
-export interface IngredientDocument extends Ingredient, Document {}
+// Mongoose document type for the Ingredient model. Declared as a type
+// intersection (`Ingredient & Document`) rather than `interface ... extends
+// Ingredient, Document` because the two bases declare `id` incompatibly
+// (`Ingredient.id: string` (required) vs mongoose `Document.id?: any`
+// (optional)), which an `extends` clause rejects with TS2320. The intersection
+// merges the members instead and mirrors the established `Pantry & Document` /
+// `IShoppingList & Document` pattern used by the other models. Type-only — no
+// effect on the compiled schema or runtime behavior.
+export type IngredientDocument = Ingredient & Document;
 
 /**
  * Validates that a shelf-life value is a positive number.

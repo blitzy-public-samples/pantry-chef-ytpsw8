@@ -4,7 +4,7 @@
 // tsconfig, so the default import resolves the aws-sdk CommonJS module export
 // correctly. Without the `AWS` binding this module threw a runtime
 // `ReferenceError: AWS is not defined` at first use, breaking application boot.
-import AWS, { S3, CloudWatch } from 'aws-sdk'; // ^2.1.0
+import AWS, { S3, CloudWatch, KMS } from 'aws-sdk'; // ^2.1.0
 import dotenv from 'dotenv'; // ^16.0.0
 import { STORAGE_CONSTANTS } from '../utils/constants';
 import logger from '../utils/logger';
@@ -61,9 +61,11 @@ export const configureAWS = (): void => {
             environment: NODE_ENV
         });
     } catch (error) {
+        // `error` is typed `unknown` under strict mode; narrow before reading `.message`/`.stack`.
+        const err = error instanceof Error ? error : new Error(String(error));
         logger.error('Failed to configure AWS SDK', {
-            error: error.message,
-            stack: error.stack
+            error: err.message,
+            stack: err.stack
         });
         throw error;
     }
@@ -75,6 +77,10 @@ export const configureAWS = (): void => {
  */
 export const createS3Client = (): S3 => {
     try {
+        // `serverSideEncryption` is a per-request PutObject parameter, not an SDK
+        // `ClientConfiguration` field; it is retained here (the SDK ignores unknown
+        // client options at runtime) via a type assertion to satisfy strict typing
+        // without changing the established runtime configuration.
         const s3Client = new S3({
             region: AWS_REGION,
             apiVersion: '2006-03-01',
@@ -85,9 +91,11 @@ export const createS3Client = (): S3 => {
             params: {
                 Bucket: STORAGE_CONSTANTS.S3_BUCKET_NAME
             }
-        });
+        } as S3.ClientConfiguration);
 
-        // Configure upload parameters and limits
+        // Configure upload parameters and limits. `cors` is an S3 bucket-policy
+        // construct rather than an SDK `ConfigurationOptions` field; it is asserted
+        // to preserve the existing runtime call shape under strict typing.
         s3Client.config.update({
             httpOptions: {
                 timeout: 300000, // 5 minutes
@@ -101,7 +109,7 @@ export const createS3Client = (): S3 => {
                 AllowedOrigins: ['*'],
                 ExposeHeaders: ['ETag']
             }
-        });
+        } as AWS.ConfigurationOptions);
 
         logger.info('S3 client configured successfully', {
             bucket: STORAGE_CONSTANTS.S3_BUCKET_NAME,
@@ -110,9 +118,11 @@ export const createS3Client = (): S3 => {
 
         return s3Client;
     } catch (error) {
+        // `error` is typed `unknown` under strict mode; narrow before reading `.message`/`.stack`.
+        const err = error instanceof Error ? error : new Error(String(error));
         logger.error('Failed to create S3 client', {
-            error: error.message,
-            stack: error.stack
+            error: err.message,
+            stack: err.stack
         });
         throw error;
     }
@@ -169,12 +179,32 @@ export const createCloudWatchClient = (): CloudWatch => {
 
         return cloudWatchClient;
     } catch (error) {
+        // `error` is typed `unknown` under strict mode; narrow before reading `.message`/`.stack`.
+        const err = error instanceof Error ? error : new Error(String(error));
         logger.error('Failed to create CloudWatch client', {
-            error: error.message,
-            stack: error.stack
+            error: err.message,
+            stack: err.stack
         });
         throw error;
     }
+};
+
+/**
+ * Lazily creates and returns a shared AWS KMS client instance.
+ * Requirement: Data Security - AES-256 envelope encryption uses AWS KMS for key
+ * management (consumed by utils/security.ts encryptData/decryptData). The client is
+ * created on first use (not at module load) so importing this module for S3/CloudWatch
+ * never forces KMS initialization.
+ */
+let kmsClientInstance: KMS | null = null;
+export const getKMSClient = (): KMS => {
+    if (!kmsClientInstance) {
+        kmsClientInstance = new KMS({
+            region: AWS_REGION,
+            apiVersion: '2014-11-01'
+        });
+    }
+    return kmsClientInstance;
 };
 
 // Initialize AWS clients

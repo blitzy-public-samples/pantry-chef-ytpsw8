@@ -42,6 +42,7 @@
 
 import request from 'supertest';
 import express, { Request, Response, NextFunction } from 'express';
+import { RateLimiterRedis } from 'rate-limiter-flexible';
 import { imageUploadLimiter, recipeMatchLimiter } from '../../src/api/middlewares/rateLimiter.middleware';
 import { errorHandler } from '../../src/api/middlewares/error.middleware';
 import { CacheService } from '../../src/services/cache.service';
@@ -167,6 +168,37 @@ describe('Rate Limiter Integration Tests', () => {
             expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
             expect(blocked.body.success).toBe(false);
             expect(blocked.body.error.code).toBe('RATE_LIMIT_EXCEEDED');
+        });
+    });
+
+    // CP8-06 — cover the non-breach error branch of rateLimiterMiddleware. The 429
+    // breach path (a RateLimiterRes rejection) is exercised above; this asserts the
+    // OTHER catch branch, where the limiter store fails with a generic error that is
+    // NOT a RateLimiterRes. The middleware must then forward a 500 AppError with code
+    // 'RATE_LIMITER_ERROR' through next(error), which the real errorHandler renders as
+    // the unified error envelope. This raises rateLimiter.middleware.ts branch coverage
+    // by covering the previously-untested limiter-failure path.
+    describe('non-breach limiter error → 500 (RATE_LIMITER_ERROR)', () => {
+        it('forwards a 500 RATE_LIMITER_ERROR envelope when the limiter store rejects with a non-breach error', async () => {
+            // Spying on the prototype replaces the entire consume implementation, so the
+            // configured insuranceLimiter fallback is bypassed and the generic rejection
+            // propagates straight to the middleware catch. `mockRejectedValueOnce` fails a
+            // single consume call; the spy is restored in `finally` so no other spec — and
+            // no later run — inherits the stub.
+            const consumeSpy = jest
+                .spyOn(RateLimiterRedis.prototype, 'consume')
+                .mockRejectedValueOnce(new Error('redis store unavailable'));
+
+            try {
+                const harness = makeHarness(imageUploadLimiter, `${IMAGE_USER}-err`);
+                const res = await request(harness).post('/probe');
+
+                expect(res.status).toBe(500);
+                expect(res.body.success).toBe(false);
+                expect(res.body.error.code).toBe('RATE_LIMITER_ERROR');
+            } finally {
+                consumeSpy.mockRestore();
+            }
         });
     });
 });

@@ -2,6 +2,7 @@
 import AWS from 'aws-sdk'; // ^2.1.0
 import handlebars from 'handlebars'; // ^4.7.0
 import nodemailer from 'nodemailer'; // ^6.7.0
+import type SESTransport from 'nodemailer/lib/ses-transport';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { logger, error as logError, info as logInfo } from '../utils/logger';
@@ -45,13 +46,17 @@ export class EmailService {
 
         // Initialize nodemailer with SES transport
         this.transporter = nodemailer.createTransport({
-            SES: this.SES,
+            // aws-sdk v2's `AWS.SES` instance is accepted by nodemailer's SES
+            // transport at runtime, but its type does not structurally match the
+            // `SESClientLike` shape the @types declare; narrow only the `SES`
+            // property so `sendingRate` remains type-checked.
+            SES: this.SES as unknown as SESTransport.Options['SES'],
             sendingRate: 14 // AWS SES limit per second
         });
 
         // Load email templates
         this.loadTemplates().catch(error => {
-            logError(error, 'EmailService.constructor');
+            logError(error instanceof Error ? error.message : String(error), 'EmailService.constructor');
             throw new AppError(
                 'Failed to initialize email service',
                 500,
@@ -84,7 +89,7 @@ export class EmailService {
                 templateCount: Object.keys(this.templates).length
             });
         } catch (error) {
-            logError(error, 'EmailService.loadTemplates');
+            logError(error instanceof Error ? error.message : String(error), 'EmailService.loadTemplates');
             throw error;
         }
     }
@@ -153,7 +158,7 @@ export class EmailService {
                 itemCount: expiringItems.length
             });
         } catch (error) {
-            logError(error, 'EmailService.sendExpirationAlert');
+            logError(error instanceof Error ? error.message : String(error), 'EmailService.sendExpirationAlert');
             throw error;
         }
     }
@@ -204,7 +209,7 @@ export class EmailService {
                 email: user.email
             });
         } catch (error) {
-            logError(error, 'EmailService.sendWelcomeEmail');
+            logError(error instanceof Error ? error.message : String(error), 'EmailService.sendWelcomeEmail');
             throw error;
         }
     }
@@ -284,7 +289,7 @@ export class EmailService {
                 recipeCount: filteredRecipes.length
             });
         } catch (error) {
-            logError(error, 'EmailService.sendRecipeRecommendations');
+            logError(error instanceof Error ? error.message : String(error), 'EmailService.sendRecipeRecommendations');
             throw error;
         }
     }

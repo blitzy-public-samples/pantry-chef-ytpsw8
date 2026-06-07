@@ -37,7 +37,7 @@ export class RecipeService {
             const recipe = await RecipeModel.create(recipeData);
 
             // Queue recipe indexing for Elasticsearch
-            await this.queueService.publishToQueue('recipe.index', {
+            await QueueService.publishToQueue('recipe.index', {
                 action: 'CREATE',
                 recipeId: recipe.id,
                 recipe: recipe.toJSON()
@@ -139,7 +139,7 @@ export class RecipeService {
             }
 
             // Queue recipe update for Elasticsearch
-            await this.queueService.publishToQueue('recipe.index', {
+            await QueueService.publishToQueue('recipe.index', {
                 action: 'UPDATE',
                 recipeId,
                 recipe: updatedRecipe.toJSON()
@@ -187,7 +187,7 @@ export class RecipeService {
             }
 
             // Queue recipe deletion from Elasticsearch
-            await this.queueService.publishToQueue('recipe.index', {
+            await QueueService.publishToQueue('recipe.index', {
                 action: 'DELETE',
                 recipeId
             });
@@ -237,7 +237,7 @@ export class RecipeService {
             }
 
             // Queue ingredient matching job for analytics
-            await this.queueService.publishToQueue('recipe.matching', {
+            await QueueService.publishToQueue('recipe.matching', {
                 ingredientIds,
                 timestamp: new Date().toISOString()
             });
@@ -307,7 +307,7 @@ export class RecipeService {
             await this.cacheService.set(cacheKey, searchResults, 1800); // 30 minutes TTL
 
             // Queue search analytics
-            await this.queueService.publishToQueue('recipe.search', {
+            await QueueService.publishToQueue('recipe.search', {
                 query,
                 filters,
                 resultCount: searchResults.total,

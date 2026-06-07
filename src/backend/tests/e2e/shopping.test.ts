@@ -313,4 +313,77 @@ describe('Shopping List API (e2e)', () => {
       expect(res.status).toBe(404);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // CP8-03 — negative input-validation coverage for the F1 HTTP contract.
+  // Each mutating route runs its express-validator chain followed by the
+  // controller's `validationResult` guard, which emits the unified error
+  // envelope { success:false, error:{ code:'VALIDATION_ERROR',
+  // message:'Validation failed', details:[...] } } with HTTP 400. Every request
+  // below is authenticated so the assertion targets the VALIDATION layer
+  // specifically (an unauthenticated request would short-circuit to 401 in the
+  // global `authenticate` guard before any validator runs). These specs assert
+  // the rejection PATH that the existing happy-path specs never exercise,
+  // raising shopping.validator.ts from statement-only to branch coverage.
+  // -------------------------------------------------------------------------
+  describe('input validation → 400 (VALIDATION_ERROR envelope)', () => {
+    // Asserts the canonical 400 validation envelope shape in one place so each
+    // spec stays focused on the single rule it is exercising.
+    const expectValidation400 = (res: request.Response): void => {
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toBe('Validation failed');
+      expect(Array.isArray(res.body.error.details)).toBe(true);
+      expect(res.body.error.details.length).toBeGreaterThan(0);
+    };
+
+    it('create: empty `name` → 400 (isLength min:1)', async () => {
+      const res = await request(configuredApp)
+        .post(`${BASE}/`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(buildListPayload({ name: '' }));
+      expectValidation400(res);
+    });
+
+    it('create: over-length `name` (>100 chars) → 400 (isLength max:100)', async () => {
+      const res = await request(configuredApp)
+        .post(`${BASE}/`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(buildListPayload({ name: 'a'.repeat(101) }));
+      expectValidation400(res);
+    });
+
+    it('create: negative item `quantity` → 400 (isFloat min:0)', async () => {
+      const res = await request(configuredApp)
+        .post(`${BASE}/`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(
+          buildListPayload({
+            items: [{ name: 'Milk', quantity: -1, unit: 'liters' }],
+          }),
+        );
+      expectValidation400(res);
+    });
+
+    it('generate: non-ObjectId `recipeIds` → 400 (validateObjectId)', async () => {
+      const res = await request(configuredApp)
+        .post(`${BASE}/${testListId}/generate`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ recipeIds: ['not-a-valid-objectid'], servings: 2 });
+      expectValidation400(res);
+    });
+
+    it('generate: out-of-range `servings` (0) → 400 (isInt min:1)', async () => {
+      const res = await request(configuredApp)
+        .post(`${BASE}/${testListId}/generate`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          recipeIds: [new mongoose.Types.ObjectId().toString()],
+          servings: 0,
+        });
+      expectValidation400(res);
+    });
+  });
 });

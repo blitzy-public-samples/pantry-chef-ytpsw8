@@ -215,23 +215,33 @@ export class RecipeController {
                 prepTimeMax,
                 cookTimeMax,
                 page = 1,
-                limit = 20,
-                sort = 'rating',
-                order = 'desc'
+                limit = 20
             } = req.query;
 
             // Search recipes through service layer
             const searchResults = await this.recipeService.searchRecipes(
                 search as string,
                 {
-                    cuisine: cuisine as string,
-                    difficulty: difficulty as string,
-                    prepTimeMax: prepTimeMax ? parseInt(prepTimeMax as string) : undefined,
-                    cookTimeMax: cookTimeMax ? parseInt(cookTimeMax as string) : undefined,
+                    // Map query parameters onto the SearchFilters contract.
+                    // cuisine/difficulty are string[] (SearchService defaults each
+                    // to [] and guards on .length, so [] preserves the no-filter
+                    // path). maxPrepTime/maxCookTime are numeric and guarded by a
+                    // truthiness check downstream, so 0 yields no filter — matching
+                    // the prior behavior when the value was absent. pageSize is
+                    // derived from the limit query parameter. The sort/order query
+                    // params are intentionally not forwarded: search ranking is
+                    // fixed server-side (_score, then averageRating). Each req.query
+                    // value (string | ParsedQs | array | undefined) is matched with
+                    // an explicit string-presence check so the conditional operates
+                    // on a definite boolean and the narrowed string is used directly.
+                    cuisine: typeof cuisine === 'string' && cuisine.length > 0 ? [cuisine] : [],
+                    difficulty: typeof difficulty === 'string' && difficulty.length > 0 ? [difficulty] : [],
+                    maxPrepTime:
+                        typeof prepTimeMax === 'string' && prepTimeMax.length > 0 ? parseInt(prepTimeMax, 10) : 0,
+                    maxCookTime:
+                        typeof cookTimeMax === 'string' && cookTimeMax.length > 0 ? parseInt(cookTimeMax, 10) : 0,
                     page: parseInt(page as string),
-                    limit: parseInt(limit as string),
-                    sort: sort as string,
-                    order: order as 'asc' | 'desc'
+                    pageSize: parseInt(limit as string)
                 }
             );
 

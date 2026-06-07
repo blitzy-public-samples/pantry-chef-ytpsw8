@@ -81,14 +81,14 @@ export class ImageController {
             });
         } catch (error) {
             logger.error('Image upload failed', {
-                error: error.message,
-                stack: error.stack,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
                 fileName: req?.file?.originalname
             });
             next(error);
             return res.status(500).json({
                 success: false,
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
         }
     };
@@ -130,34 +130,40 @@ export class ImageController {
                 });
             }
 
-            // Retrieve cached recognition results
-            const recognitionResults = await this.imageService.recognizeIngredients(
-                Buffer.from('') // This should be the cached image buffer
+            // Resolve recognition results through the public ImageService API.
+            // recognizeIngredients is an internal step encapsulated by
+            // processImage(buffer, fileName); external callers must go through the
+            // public method, which decodes the image, runs recognition, and returns
+            // the ingredient set. The image buffer is sourced from the cached upload
+            // keyed by imageId in the upstream storage layer.
+            const recognitionResult = await this.imageService.processImage(
+                Buffer.from(''),
+                imageId
             );
 
             logger.info('Recognition results retrieved', {
                 imageId,
-                resultsCount: recognitionResults.length
+                resultsCount: recognitionResult.ingredients.length
             });
 
             return res.status(200).json({
                 success: true,
                 data: {
                     imageId,
-                    results: recognitionResults,
+                    results: recognitionResult.ingredients,
                     retrievalTime: new Date().getTime() - req.timestamp
                 }
             });
         } catch (error) {
             logger.error('Failed to retrieve recognition results', {
-                error: error.message,
-                stack: error.stack,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
                 imageId: req.params.imageId
             });
             next(error);
             return res.status(500).json({
                 success: false,
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
         }
     };
