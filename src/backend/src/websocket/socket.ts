@@ -1,4 +1,5 @@
 // @version socket.io ^4.5.0
+// @version @socket.io/redis-adapter ^8.3.0
 
 // HUMAN TASKS:
 // 1. Configure SSL certificates for WebSocket server in production
@@ -9,9 +10,17 @@
 // 6. Set up automatic WebSocket room cleanup intervals
 
 import { Server, Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 import { NotificationHandler } from './handlers/notification.handler';
 import { PantryWebSocketHandler } from './handlers/pantry.handler';
 import { RecipeHandler } from './handlers/recipe.handler';
+import { NotificationService } from '../services/notification.service';
+import { PantryService } from '../services/pantry.service';
+import { RecipeService } from '../services/recipe.service';
+import { CacheService } from '../services/cache.service';
+import { QueueService } from '../services/queue.service';
+import { SearchService } from '../services/search.service';
+import { createRedisClient } from '../config/redis';
 import { logger } from '../utils/logger';
 
 /**
@@ -27,7 +36,6 @@ export class WebSocketServer {
     private notificationHandler: NotificationHandler;
     private pantryHandler: PantryWebSocketHandler;
     private recipeHandler: RecipeHandler;
-    private connectedClients: Map<string, Socket>;
 
     /**
      * Initializes the WebSocket server with all required handlers
@@ -47,11 +55,39 @@ export class WebSocketServer {
             maxHttpBufferSize: 1e6 // 1MB
         });
 
-        // Initialize handlers
-        this.notificationHandler = new NotificationHandler();
-        this.pantryHandler = new PantryWebSocketHandler();
-        this.recipeHandler = new RecipeHandler();
-        this.connectedClients = new Map<string, Socket>();
+        // Configure the Redis adapter for cross-instance WebSocket fan-out.
+        // Reuses the canonical createRedisClient() factory (config/redis.ts) so the
+        // adapter shares the same Redis connection configuration as the cache layer.
+        const pubClient = createRedisClient();
+        const subClient = pubClient.duplicate();
+        this.io.adapter(createAdapter(pubClient, subClient));
+
+        // Construct the service dependencies each handler requires, then wire them
+        // into the handlers. The previous no-argument `new XHandler()` calls did not
+        // satisfy the handlers' required constructor parameters (TS2554) and would
+        // have thrown at runtime (RecipeHandler rejects a missing RecipeService), so
+        // the WebSocket server — and therefore the Redis adapter fan-out — could
+        // never actually initialize.
+        //
+        // The services are constructed explicitly rather than resolved through the
+        // tsyringe container because the dependency graph is mixed: RecipeService is
+        // not decorated with `@injectable()` (so the container cannot resolve its
+        // dependencies), and NotificationService requires the live Socket.IO `Server`
+        // instance (`this.io`) that only exists here. CacheService, QueueService, and
+        // SearchService have no-argument / default-argument constructors.
+        const cacheService = new CacheService();
+        const queueService = new QueueService();
+        const searchService = new SearchService();
+        const notificationService = new NotificationService(this.io);
+        const pantryService = new PantryService(cacheService, queueService, notificationService);
+        const recipeService = new RecipeService(searchService, cacheService, queueService);
+
+        // Initialize handlers with their resolved service dependencies. NotificationHandler
+        // receives the live Socket.IO `Server` so it can derive connection presence from
+        // adapter-backed rooms (cross-node) rather than a process-local connection map.
+        this.notificationHandler = new NotificationHandler(notificationService, this.io);
+        this.pantryHandler = new PantryWebSocketHandler(pantryService);
+        this.recipeHandler = new RecipeHandler(recipeService);
 
         logger.info('WebSocket server initialized', {
             timestamp: new Date().toISOString(),
@@ -117,9 +153,6 @@ export class WebSocketServer {
         const userId = socket.data.userId;
 
         try {
-            // Track connected client
-            this.connectedClients.set(userId, socket);
-
             // Set up handlers for the connected client
             this.notificationHandler.handleConnection(socket, userId);
             this.pantryHandler.handlePantrySync(socket, userId);
@@ -170,9 +203,6 @@ export class WebSocketServer {
         try {
             // Clean up handlers
             this.notificationHandler.handleDisconnection(userId);
-            
-            // Remove from connected clients
-            this.connectedClients.delete(userId);
 
             // Clean up socket rooms
             socket.rooms.forEach(room => {

@@ -1,7 +1,5 @@
 // @version mongoose ^6.0.0
 
-import { id } from '../interfaces/recipe.interface';
-
 /**
  * HUMAN TASKS:
  * 1. Verify that analytics collection intervals align with business reporting requirements

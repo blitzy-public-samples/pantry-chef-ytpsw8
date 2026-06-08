@@ -13,11 +13,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { Recipe } from '../../interfaces/recipe.interface';
 import { RecipeService } from '../../services/recipe.service';
-import { 
-    validateCreateRecipe, 
-    validateUpdateRecipe, 
-    validateRecipeQuery 
-} from '../validators/recipe.validator';
+// NOTE: request validation for recipe routes is applied at the router level in
+// recipe.routes.ts (validateCreateRecipe()/validateUpdateRecipe()/
+// validateRecipeQuery() are express-validator middleware chains). They were
+// previously also (incorrectly) applied here as method decorators — a
+// validator-chain array is not a valid TS method decorator, which threw at
+// class-definition time and prevented the recipe router (and the whole route
+// aggregator) from loading. The decorators have been removed; validation
+// continues to run via the route middleware chains.
 import { errorHandler } from '../middlewares/error.middleware';
 import { logger } from '../../utils/logger';
 
@@ -47,7 +50,6 @@ export class RecipeController {
      * Creates a new recipe with validation
      * Requirement: Recipe Management - Smart recipe matching based on available ingredients
      */
-    @validateCreateRecipe()
     public async createRecipe(
         req: Request,
         res: Response,
@@ -132,7 +134,6 @@ export class RecipeController {
      * Updates an existing recipe with validation
      * Requirement: Recipe Management - Recipe data management
      */
-    @validateUpdateRecipe()
     public async updateRecipe(
         req: Request,
         res: Response,
@@ -200,7 +201,6 @@ export class RecipeController {
      * Searches recipes with filters and pagination
      * Requirement: Recipe Discovery - Recipe and ingredient search functionality
      */
-    @validateRecipeQuery()
     public async searchRecipes(
         req: Request,
         res: Response,
@@ -215,23 +215,33 @@ export class RecipeController {
                 prepTimeMax,
                 cookTimeMax,
                 page = 1,
-                limit = 20,
-                sort = 'rating',
-                order = 'desc'
+                limit = 20
             } = req.query;
 
             // Search recipes through service layer
             const searchResults = await this.recipeService.searchRecipes(
                 search as string,
                 {
-                    cuisine: cuisine as string,
-                    difficulty: difficulty as string,
-                    prepTimeMax: prepTimeMax ? parseInt(prepTimeMax as string) : undefined,
-                    cookTimeMax: cookTimeMax ? parseInt(cookTimeMax as string) : undefined,
+                    // Map query parameters onto the SearchFilters contract.
+                    // cuisine/difficulty are string[] (SearchService defaults each
+                    // to [] and guards on .length, so [] preserves the no-filter
+                    // path). maxPrepTime/maxCookTime are numeric and guarded by a
+                    // truthiness check downstream, so 0 yields no filter — matching
+                    // the prior behavior when the value was absent. pageSize is
+                    // derived from the limit query parameter. The sort/order query
+                    // params are intentionally not forwarded: search ranking is
+                    // fixed server-side (_score, then averageRating). Each req.query
+                    // value (string | ParsedQs | array | undefined) is matched with
+                    // an explicit string-presence check so the conditional operates
+                    // on a definite boolean and the narrowed string is used directly.
+                    cuisine: typeof cuisine === 'string' && cuisine.length > 0 ? [cuisine] : [],
+                    difficulty: typeof difficulty === 'string' && difficulty.length > 0 ? [difficulty] : [],
+                    maxPrepTime:
+                        typeof prepTimeMax === 'string' && prepTimeMax.length > 0 ? parseInt(prepTimeMax, 10) : 0,
+                    maxCookTime:
+                        typeof cookTimeMax === 'string' && cookTimeMax.length > 0 ? parseInt(cookTimeMax, 10) : 0,
                     page: parseInt(page as string),
-                    limit: parseInt(limit as string),
-                    sort: sort as string,
-                    order: order as 'asc' | 'desc'
+                    pageSize: parseInt(limit as string)
                 }
             );
 

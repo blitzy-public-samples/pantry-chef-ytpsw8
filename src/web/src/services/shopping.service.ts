@@ -19,13 +19,73 @@ import {
 } from '../interfaces/shopping.interface';
 import { apiClient, handleApiError } from '../utils/api';
 
-// API endpoints for shopping list operations
+// API endpoints for shopping list operations.
+//
+// These are paths RELATIVE to the shared axios client's baseURL, which is already
+// `${origin}/api/v1` (see src/config/constants.ts API_CONFIG.BASE_URL and
+// src/config/api.ts `baseURL: BASE_URL`). The whole web app follows this convention:
+// every sibling endpoint in API_ENDPOINTS (e.g. AUTH.LOGIN '/auth/login',
+// PANTRY.ADD '/pantry/items', RECIPES.MATCH '/recipes/match') is declared WITHOUT a
+// leading `/api/v1`, and apiClient prepends it. These constants must do the same —
+// embedding `/api/v1` here caused apiClient to emit a doubled
+// `/api/v1/api/v1/shopping-lists/...` URL that 404s against the backend.
+//
+// They still mirror the authoritative six-route backend contract exactly (R4/R8):
+// create/update/delete target the mount base, while the collection GET targets the
+// intentional doubled SEGMENT the backend registers (see LISTS). Resolved URLs:
+//   BASE     -> /api/v1/shopping-lists                       (POST /, PUT /:id, DELETE /:id)
+//   LISTS    -> /api/v1/shopping-lists/shopping-lists        (GET collection)
+//   GENERATE -> /api/v1/shopping-lists/:id/generate          (POST)
+//   TOGGLE   -> /api/v1/shopping-lists/:id/items/:itemId/toggle (PATCH)
 const SHOPPING_API = {
-  BASE: '/api/v1/shopping',
-  LISTS: '/api/v1/shopping/lists',
-  GENERATE: '/api/v1/shopping/generate',
-  ITEMS: '/api/v1/shopping/lists/:listId/items',
-  FILTER: '/api/v1/shopping/lists/:listId/filter'
+  // Mount base — create (POST /), update (PUT /:id), delete (DELETE /:id).
+  BASE: '/shopping-lists',
+  // Collection GET is the INTENTIONAL doubled SEGMENT: the backend registers the
+  // router-relative GET at '/shopping-lists' under the '/shopping-lists' mount, so
+  // the effective list URL is /api/v1/shopping-lists/shopping-lists.
+  // Used ONLY by getShoppingLists(); every other operation uses BASE.
+  LISTS: '/shopping-lists/shopping-lists',
+  GENERATE: '/shopping-lists/:id/generate',
+  // NOTE (Finding 1.1-B): a standalone per-item collection constant was removed as dead code.
+  // The authoritative six-route contract has no `/:id/items` endpoint — per-item mutations are
+  // expressed via the full-list PUT (/:id) or the toggle PATCH (/:id/items/:itemId/toggle below).
+  TOGGLE: '/shopping-lists/:id/items/:itemId/toggle'
+};
+
+/**
+ * Backend unified success envelope. Every shopping-list endpoint wraps its
+ * payload as `{ success, data, metadata }` (see the backend recipe/user/image
+ * controllers and the shopping e2e suite). The service unwraps `data` so its
+ * callers — the Redux `shoppingSlice` thunks — receive domain objects
+ * (`ShoppingList[]`, `ShoppingList`, `ShoppingListItem`), never the transport
+ * envelope.
+ */
+interface ApiEnvelope<T> {
+  success: boolean;
+  data: T;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Removes server-managed fields from an outbound create/update payload.
+ *
+ * The backend create/update validators explicitly REJECT client-supplied
+ * server-managed fields (`id`/`_id`, `userId`, `createdAt`, `updatedAt`) and respond
+ * with HTTP 400. The web client, however, holds full `ShoppingList` objects in Redux
+ * (each already carrying `id`, `createdAt`, `updatedAt`, and `userId` from a prior fetch
+ * or from a `Date.now()`-stamped draft), so forwarding the whole object on create/update
+ * tripped that validation. Stripping these fields here keeps the request body aligned
+ * with the backend contract — the server remains the sole authority for identifiers and
+ * timestamps — without mutating the caller's local domain object (a shallow copy is used).
+ */
+const stripServerManagedFields = (payload: Partial<ShoppingList>): Partial<ShoppingList> => {
+  const sanitized = { ...payload } as Record<string, unknown>;
+  delete sanitized.id;
+  delete sanitized._id;
+  delete sanitized.userId;
+  delete sanitized.createdAt;
+  delete sanitized.updatedAt;
+  return sanitized as Partial<ShoppingList>;
 };
 
 /**
@@ -39,24 +99,32 @@ const ShoppingService = {
    */
   async getShoppingLists(): Promise<ShoppingList[]> {
     try {
-      const response = await apiClient.get<ShoppingList[]>(SHOPPING_API.LISTS);
-      return response.data;
+      const response = await apiClient.get<ApiEnvelope<ShoppingList[]>>(SHOPPING_API.LISTS);
+      // Unwrap the unified backend envelope { success, data, metadata }.
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
   },
 
   /**
-   * Retrieves a specific shopping list by ID
+   * Retrieves a specific shopping list by ID.
    * Requirement: Shopping List Management
+   *
+   * The API route contract exposes NO GET-by-id endpoint for shopping lists
+   * (the six routes are GET /, POST /, PUT /:id, DELETE /:id, POST /:id/generate,
+   * and PATCH /:id/items/:itemId/toggle). To honor that contract without calling
+   * an unsupported route, this fetches the user's list collection and selects the
+   * matching list client-side. `getShoppingLists()` already unwraps the envelope
+   * and maps transport errors, so only the not-found case is added here.
    */
   async getShoppingList(id: string): Promise<ShoppingList> {
-    try {
-      const response = await apiClient.get<ShoppingList>(`${SHOPPING_API.LISTS}/${id}`);
-      return response.data;
-    } catch (error) {
-      throw handleApiError(error as AxiosError);
+    const lists = await ShoppingService.getShoppingLists();
+    const match = lists.find((list) => list.id === id);
+    if (!match) {
+      throw new Error(`Shopping list ${id} not found`);
     }
+    return match;
   },
 
   /**
@@ -65,8 +133,13 @@ const ShoppingService = {
    */
   async createShoppingList(data: Partial<ShoppingList>): Promise<ShoppingList> {
     try {
-      const response = await apiClient.post<ShoppingList>(SHOPPING_API.LISTS, data);
-      return response.data;
+      // POST / -> the mount base (NOT the doubled GET collection path).
+      // Strip server-managed fields so the create validator does not 400 the request.
+      const response = await apiClient.post<ApiEnvelope<ShoppingList>>(
+        SHOPPING_API.BASE,
+        stripServerManagedFields(data)
+      );
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
@@ -78,8 +151,13 @@ const ShoppingService = {
    */
   async updateShoppingList(id: string, data: Partial<ShoppingList>): Promise<ShoppingList> {
     try {
-      const response = await apiClient.put<ShoppingList>(`${SHOPPING_API.LISTS}/${id}`, data);
-      return response.data;
+      // PUT /:id -> the mount base + id (NOT the doubled GET collection path).
+      // Strip server-managed fields so the update validator does not 400 the request.
+      const response = await apiClient.put<ApiEnvelope<ShoppingList>>(
+        `${SHOPPING_API.BASE}/${id}`,
+        stripServerManagedFields(data)
+      );
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
@@ -91,7 +169,8 @@ const ShoppingService = {
    */
   async deleteShoppingList(id: string): Promise<void> {
     try {
-      await apiClient.delete(`${SHOPPING_API.LISTS}/${id}`);
+      // DELETE /:id -> the mount base + id (NOT the doubled GET collection path).
+      await apiClient.delete(`${SHOPPING_API.BASE}/${id}`);
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
@@ -101,58 +180,96 @@ const ShoppingService = {
    * Generates a shopping list from selected recipes
    * Requirement: Shopping List Generation (1.2 Scope/Core Capabilities)
    */
-  async generateShoppingList(options: ShoppingListGenerationOptions): Promise<ShoppingList> {
+  async generateShoppingList(id: string, options: ShoppingListGenerationOptions): Promise<ShoppingList> {
+    // The generate route is POST /:id/generate, so a real list id is REQUIRED.
+    // Guarding here prevents building a doubled-slash URL
+    // (`/api/v1/shopping-lists//generate`) that would miss the backend route.
+    if (!id) {
+      throw new Error('A shopping list id is required to generate a shopping list');
+    }
     try {
-      const response = await apiClient.post<ShoppingList>(SHOPPING_API.GENERATE, options);
-      return response.data;
+      const endpoint = SHOPPING_API.GENERATE.replace(':id', id);
+      const response = await apiClient.post<ApiEnvelope<ShoppingList>>(endpoint, options);
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
   },
 
   /**
-   * Updates a specific item in a shopping list
+   * Toggles the `checked` state of a specific item in a shopping list.
+   *
+   * Targets the PATCH toggle route from the authoritative contract
+   * (`/api/v1/shopping-lists/:id/items/:itemId/toggle`), which the backend
+   * controller answers with the FULL updated `ShoppingList` — not the single
+   * toggled item. This method therefore resolves to `ShoppingList`, matching the
+   * backend's authoritative response contract and the iOS
+   * `ShoppingListService.toggleItem` for cross-platform consistency (R8). The
+   * unified envelope `{ success, data, metadata }` is unwrapped to `data` so
+   * callers receive the domain list directly.
+   *
    * Requirement: Shopping List Management
    */
   async updateShoppingListItem(
     listId: string, 
     itemId: string, 
     data: Partial<ShoppingListItem>
-  ): Promise<ShoppingListItem> {
+  ): Promise<ShoppingList> {
     try {
-      const endpoint = SHOPPING_API.ITEMS.replace(':listId', listId);
-      const response = await apiClient.put<ShoppingListItem>(
-        `${endpoint}/${itemId}`, 
-        data
-      );
-      return response.data;
+      const endpoint = SHOPPING_API.TOGGLE
+        .replace(':id', listId)
+        .replace(':itemId', itemId);
+      const response = await apiClient.patch<ApiEnvelope<ShoppingList>>(endpoint, data);
+      return response.data.data;
     } catch (error) {
       throw handleApiError(error as AxiosError);
     }
   },
 
   /**
-   * Filters shopping list items based on criteria
+   * Filters a shopping list's items by the supplied criteria.
    * Requirement: Simplified Grocery Shopping (1.2 Scope/Key Benefits)
+   *
+   * Filtering is performed CLIENT-SIDE: the authoritative six-route backend contract
+   * exposes no filter endpoint (the prior `/api/v1/shopping/lists/:listId/filter`
+   * route was never implemented and would hit a dead endpoint). The list is fetched
+   * via `getShoppingList(listId)` — itself contract-compliant, sourcing from the
+   * collection GET — and its embedded items are filtered in memory. The method
+   * signature and `ShoppingListItem[]` return type are unchanged, so the
+   * `useShoppingList` hook (`filterItems`) keeps working without modification.
+   *
+   * Filter semantics:
+   * - `categories`: when non-empty, keep items whose `category` is in the set.
+   * - `searchTerm`: when non-empty, keep items whose `name` contains it (case-insensitive).
+   * - `showCheckedItems`: when false, drop checked-off items.
+   * - `recipeId`: when non-empty, keep items originating from that recipe.
    */
   async filterShoppingList(
-    listId: string, 
+    listId: string,
     filter: ShoppingListFilter
   ): Promise<ShoppingListItem[]> {
-    try {
-      const endpoint = SHOPPING_API.FILTER.replace(':listId', listId);
-      const response = await apiClient.get<ShoppingListItem[]>(endpoint, {
-        params: {
-          categories: filter.categories.join(','),
-          searchTerm: filter.searchTerm,
-          showCheckedItems: filter.showCheckedItems,
-          recipeId: filter.recipeId
-        }
-      });
-      return response.data;
-    } catch (error) {
-      throw handleApiError(error as AxiosError);
-    }
+    // getShoppingList already unwraps the unified envelope, maps transport errors,
+    // and throws a not-found error for an unknown id, so no extra try/catch is needed.
+    const list = await ShoppingService.getShoppingList(listId);
+
+    const searchTerm = filter.searchTerm.trim().toLowerCase();
+    const hasCategoryFilter = filter.categories.length > 0;
+
+    return list.items.filter((item) => {
+      if (hasCategoryFilter && !filter.categories.includes(item.category)) {
+        return false;
+      }
+      if (searchTerm.length > 0 && !item.name.toLowerCase().includes(searchTerm)) {
+        return false;
+      }
+      if (!filter.showCheckedItems && item.checked) {
+        return false;
+      }
+      if (filter.recipeId.length > 0 && item.recipeId !== filter.recipeId) {
+        return false;
+      }
+      return true;
+    });
   }
 };
 

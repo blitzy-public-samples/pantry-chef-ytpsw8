@@ -1,9 +1,9 @@
 // @version express ^4.18.0
 // @version express-rate-limit ^6.7.0
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { AuthController } from '../controllers/auth.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authenticate, AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { validateRequest } from '../middlewares/validation.middleware';
 import { 
     validateLoginRequest, 
@@ -12,6 +12,17 @@ import {
     validateNewPasswordRequest 
 } from '../validators/auth.validator';
 import rateLimit from 'express-rate-limit';
+
+/**
+ * Synchronous, void-returning wrapper around `authenticate`. The middleware is typed against
+ * `AuthenticatedRequest` and returns a Promise, whereas Express's `RequestHandler` expects a
+ * plain `Request` (contravariant position) and a `void` return. This wrapper upcasts the request
+ * and discards the promise so `authenticate` satisfies the route-registration overloads without
+ * a floating rejection.
+ */
+const authGuard = (req: Request, res: Response, next: NextFunction): void => {
+    void authenticate(req as AuthenticatedRequest, res, next);
+};
 
 /**
  * HUMAN TASKS:
@@ -71,7 +82,7 @@ export function configureAuthRoutes(authController: AuthController): Router {
     // Token refresh endpoint with authentication
     router.post(
         '/refresh-token',
-        authenticate,
+        authGuard,
         authController.refreshToken
     );
 
@@ -117,7 +128,7 @@ export function configureAuthRoutes(authController: AuthController): Router {
     // Logout endpoint with token invalidation
     router.post(
         '/logout',
-        authenticate,
+        authGuard,
         authController.login
     );
 

@@ -1,4 +1,4 @@
-import { Socket } from 'socket.io'; // ^4.5.0
+import { Socket, Server } from 'socket.io'; // ^4.5.0
 import { logger } from '../../utils/logger';
 import { NotificationService } from '../../services/notification.service';
 import { ERROR_CODES } from '../../utils/constants';
@@ -15,16 +15,24 @@ import { ERROR_CODES } from '../../utils/constants';
  * Addresses requirements: Real-time WebSocket Connections, Push Notifications, Expiration Tracking
  */
 export class NotificationHandler {
-    private connectedClients: Map<string, Socket>;
+    private readonly io: Server;
     private readonly notificationService: NotificationService;
 
     /**
      * Initializes the notification handler with required services
      * Addresses requirement: Real-time WebSocket Connections - Service initialization
+     *
+     * The handler holds a reference to the live Socket.IO {@link Server} instead of a
+     * process-local connection registry. Connection presence is derived from Socket.IO
+     * rooms which, combined with the Redis adapter configured on the server, remain
+     * correct across multiple backend instances. The previous in-memory
+     * `Map<userId, Socket>` only tracked sockets attached to the current process and
+     * silently failed to locate users connected to other nodes, so it could not support
+     * multi-node fan-out.
      */
-    constructor(notificationService: NotificationService) {
+    constructor(notificationService: NotificationService, io: Server) {
         this.notificationService = notificationService;
-        this.connectedClients = new Map<string, Socket>();
+        this.io = io;
 
         logger.info('NotificationHandler initialized successfully');
     }
@@ -42,8 +50,13 @@ export class NotificationHandler {
                 return;
             }
 
-            // Store client connection
-            this.connectedClients.set(userId, socket);
+            // Join the user-scoped room so notifications can be delivered by room name.
+            // With the Redis adapter attached to the server this room membership is shared
+            // across all backend instances, enabling cross-node delivery. `socket.join`
+            // may return a Promise when an adapter is configured; it is intentionally
+            // fire-and-forget here (the room is also re-derivable on demand), and the
+            // `void` operator documents the discarded result for the no-floating-promises rule.
+            void socket.join(userId);
 
             // Set up client-specific event listeners
             this.setupEventListeners(socket, userId);
@@ -75,19 +88,15 @@ export class NotificationHandler {
      */
     public handleDisconnection(userId: string): void {
         try {
-            // Remove client from connected clients map
-            const socket = this.connectedClients.get(userId);
-            if (socket) {
-                // Clean up event listeners
-                socket.removeAllListeners();
-                this.connectedClients.delete(userId);
-
-                logger.info('Client disconnected successfully', {
-                    userId,
-                    socketId: socket.id,
-                    disconnectionTime: new Date().toISOString()
-                });
-            }
+            // No process-local cleanup is required: Socket.IO automatically removes a
+            // disconnecting socket from every room it joined (including the user-scoped
+            // room joined in handleConnection), and that removal is propagated through the
+            // Redis adapter to all instances. Disconnection is therefore handled correctly
+            // for multi-node deployments without tracking sockets in process memory.
+            logger.info('Client disconnected successfully', {
+                userId,
+                disconnectionTime: new Date().toISOString()
+            });
         } catch (error) {
             logger.error('Error handling client disconnection', {
                 userId,
@@ -107,10 +116,14 @@ export class NotificationHandler {
                 throw new Error('Invalid notification data structure');
             }
 
-            // Check for active WebSocket connection
-            const socket = this.connectedClients.get(userId);
-            
-            if (socket && socket.connected) {
+            // Check for an active WebSocket connection across ALL backend instances.
+            // `io.in(userId).fetchSockets()` consults the Redis adapter, so it returns
+            // sockets connected to any node in the cluster — not just the current process.
+            // This replaces the former process-local Map lookup that could not see users
+            // connected elsewhere and therefore mis-routed deliveries under horizontal scale.
+            const activeSockets = await this.io.in(userId).fetchSockets();
+
+            if (activeSockets.length > 0) {
                 // Attempt WebSocket delivery
                 await this.notificationService.sendWebSocketNotification(userId, notificationData);
                 

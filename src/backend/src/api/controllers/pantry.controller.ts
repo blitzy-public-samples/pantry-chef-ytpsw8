@@ -41,7 +41,7 @@ export class PantryController {
             }
 
             const { name } = req.body;
-            const userId = req.user?.id;
+            const userId = req.user?.id as string;
 
             // Create pantry using service
             const pantry = await this.pantryService.createPantry(userId, name);
@@ -72,7 +72,7 @@ export class PantryController {
      */
     public async getPantry(req: Request, res: Response): Promise<Response> {
         try {
-            const userId = req.user?.id;
+            const userId = req.user?.id as string;
 
             // Retrieve pantry data using service
             const pantry = await this.pantryService.getPantry(userId);
@@ -120,7 +120,7 @@ export class PantryController {
                 return res.status(400).json({ errors: errors.array() });
             }
 
-            const userId = req.user?.id;
+            const userId = req.user?.id as string;
             const item: PantryItem = {
                 ingredientId: req.body.ingredientId,
                 quantity: req.body.quantity,
@@ -160,7 +160,7 @@ export class PantryController {
      */
     public async removeItem(req: Request, res: Response): Promise<Response> {
         try {
-            const userId = req.user?.id;
+            const userId = req.user?.id as string;
             const { itemId } = req.params;
 
             if (!itemId) {
@@ -206,7 +206,7 @@ export class PantryController {
                 return res.status(400).json({ errors: errors.array() });
             }
 
-            const userId = req.user?.id;
+            const userId = req.user?.id as string;
             const { itemId } = req.params;
             const { quantity } = req.body;
 
@@ -240,7 +240,7 @@ export class PantryController {
      */
     public async getExpiringItems(req: Request, res: Response): Promise<Response> {
         try {
-            const userId = req.user?.id;
+            const userId = req.user?.id as string;
 
             // Get expiring items using service
             const expiringItems = await this.pantryService.checkExpiringItems(userId);
@@ -271,7 +271,7 @@ export class PantryController {
      */
     public async getPantryStats(req: Request, res: Response): Promise<Response> {
         try {
-            const userId = req.user?.id;
+            const userId = req.user?.id as string;
 
             // Get pantry stats using service
             const stats = await this.pantryService.getPantryStats(userId);

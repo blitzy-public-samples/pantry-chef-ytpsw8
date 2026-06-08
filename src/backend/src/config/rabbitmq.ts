@@ -1,4 +1,7 @@
-import amqplib, { Connection, Channel } from 'amqplib'; // ^0.10.0
+// amqplib ^0.10 resolves `connect()` to a `ChannelModel` (the object exposing
+// `createChannel()`/`close()`); the low-level `Connection` type does not carry those
+// members, so the connection is typed as `ChannelModel` throughout.
+import amqplib, { ChannelModel, Channel } from 'amqplib'; // ^0.10.0
 import dotenv from 'dotenv'; // ^16.0.0
 import { QUEUE_CONSTANTS } from '../utils/constants';
 import logger from '../utils/logger';
@@ -20,8 +23,8 @@ dotenv.config();
 // Global configuration constants
 const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://localhost:5672';
 const RABBITMQ_HEARTBEAT = process.env.RABBITMQ_HEARTBEAT || 60;
-const RABBITMQ_PREFETCH = parseInt(process.env.RABBITMQ_PREFETCH) || 10;
-const QUEUE_RETRY_ATTEMPTS = parseInt(process.env.QUEUE_RETRY_ATTEMPTS) || 3;
+const RABBITMQ_PREFETCH = parseInt(process.env.RABBITMQ_PREFETCH ?? '', 10) || 10;
+const QUEUE_RETRY_ATTEMPTS = parseInt(process.env.QUEUE_RETRY_ATTEMPTS ?? '', 10) || 3;
 
 // Dead letter exchange name for failed messages
 const DEAD_LETTER_EXCHANGE = 'pantry-chef-dlx';
@@ -30,7 +33,7 @@ const DEAD_LETTER_EXCHANGE = 'pantry-chef-dlx';
  * Creates and returns a connection to the RabbitMQ server with automatic reconnection handling
  * Requirement: Message Queue Configuration - RabbitMQ connection with retry logic
  */
-export const createConnection = async (): Promise<Connection> => {
+export const createConnection = async (): Promise<ChannelModel> => {
     try {
         const connection = await amqplib.connect(RABBITMQ_URL, {
             heartbeat: parseInt(RABBITMQ_HEARTBEAT.toString())
@@ -66,7 +69,7 @@ export const createConnection = async (): Promise<Connection> => {
  * Creates a channel on an existing RabbitMQ connection with prefetch configuration
  * Requirement: Asynchronous Processing - Channel configuration with prefetch settings
  */
-export const createChannel = async (connection: Connection): Promise<Channel> => {
+export const createChannel = async (connection: ChannelModel): Promise<Channel> => {
     try {
         const channel = await connection.createChannel();
         
@@ -74,7 +77,7 @@ export const createChannel = async (connection: Connection): Promise<Channel> =>
         await channel.prefetch(RABBITMQ_PREFETCH);
 
         // Handle channel errors
-        channel.on('error', (error) => {
+        channel.on('error', (error: Error) => {
             logger.error('RabbitMQ channel error', { error: error.message });
         });
 

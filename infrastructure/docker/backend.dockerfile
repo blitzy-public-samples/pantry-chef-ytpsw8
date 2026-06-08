@@ -7,7 +7,10 @@
 
 # Stage 1: Builder
 # Requirement: Backend Container Configuration - Configures Node.js API service container with optimized Alpine base image
-FROM node:16-alpine AS builder
+# Node 20 is required: package.json declares "engines": { "node": ">=20.20.2" }, and several
+# runtime dependencies (and `npm ci`) refuse to install/run on Node 16. The previous
+# node:16-alpine base failed the build outright on the engines gate.
+FROM node:20-alpine AS builder
 
 # Install build dependencies
 # Requirement: Backend Technology Stack - Sets up Node.js runtime environment with required dependencies
@@ -40,7 +43,8 @@ RUN npm prune --production
 
 # Stage 2: Production
 # Requirement: Production Environment Setup - Configures production-ready container environment
-FROM node:16-alpine
+# Node 20 to match the builder stage and the package.json engines requirement (>=20.20.2).
+FROM node:20-alpine
 
 # Install production dependencies
 RUN apk add --no-cache \
@@ -68,6 +72,8 @@ ENV NODE_ENV=production \
     TZ=UTC \
     MONGODB_URI=mongodb://mongodb:27017/pantrychef \
     REDIS_URL=redis://redis:6379 \
+    REDIS_HOST=redis \
+    REDIS_PORT=6379 \
     ELASTICSEARCH_URL=http://elasticsearch:9200 \
     RABBITMQ_URL=amqp://rabbitmq:5672
 
@@ -94,10 +100,16 @@ LABEL maintainer="PantryChef DevOps" \
       description="PantryChef Backend Service" \
       version="1.0"
 
-# Drop capabilities for security hardening
-# Requirement: Security Implementation - Implements security hardening measures
-SECURITY_OPTS="no-new-privileges:true"
-CAPABILITIES="--cap-drop=ALL"
+# Capability-drop and no-new-privileges hardening are enforced at RUNTIME, not at
+# build time. There is no valid Dockerfile instruction that drops Linux capabilities
+# or sets the no-new-privileges flag on the resulting container; those are properties
+# of how the container is *run*. They are therefore applied by the orchestrator:
+#   - docker-compose: `security_opt: ["no-new-privileges:true"]` and `cap_drop: ["ALL"]`
+#                     (see infrastructure/docker/docker-compose.yml -> services.backend)
+#   - docker run:     `--security-opt no-new-privileges:true --cap-drop=ALL`
+# Build-time hardening is already in place above: the image runs as the non-root
+# `nodejs` user (see `USER nodejs:nodejs`).
+# Requirement: Security Implementation - Implements container security best practices
 
 # Define entry point
 CMD ["node", "dist/server.js"]

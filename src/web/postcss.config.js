@@ -18,12 +18,18 @@
 // Requirement: Mobile-first Design
 // Ensures proper CSS processing for responsive design through autoprefixer
 
+// Next.js requires PostCSS plugins to be declared by name (string keys), NOT as
+// `require(...)` function references. Passing functions triggers Next's
+// "Malformed PostCSS Configuration / A PostCSS Plugin was passed as a function using
+// require()" error and 500s every page. Use the canonical object form so Next's
+// built-in CSS pipeline (now responsible for globals.css/@tailwind after the custom
+// scss webpack rule was removed) can resolve the plugins itself.
 module.exports = {
-  plugins: [
+  plugins: {
     // Core Tailwind CSS processing for utility-first CSS framework
-    require('tailwindcss'),
-    
+    tailwindcss: {},
+
     // Automatic vendor prefix addition for cross-browser compatibility
-    require('autoprefixer')
-  ]
+    autoprefixer: {}
+  }
 };

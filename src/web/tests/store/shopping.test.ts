@@ -161,7 +161,7 @@ describe('Shopping Slice', () => {
         mergeDuplicates: true
       };
 
-      await store.dispatch(generateShoppingList(options));
+      await store.dispatch(generateShoppingList({ id: '1', options }));
       const state = store.getState().shopping;
 
       expect(state.lists).toContainEqual(generatedList);

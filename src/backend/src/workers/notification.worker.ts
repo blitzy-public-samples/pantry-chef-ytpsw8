@@ -13,9 +13,9 @@ import { logger } from '../utils/logger';
 
 // Global configuration constants
 const NOTIFICATION_QUEUE = process.env.NOTIFICATION_QUEUE || 'notifications';
-const WORKER_PREFETCH = parseInt(process.env.WORKER_PREFETCH) || 10;
-const MAX_RETRIES = parseInt(process.env.MAX_RETRIES) || 3;
-const RETRY_DELAY = parseInt(process.env.RETRY_DELAY) || 5000;
+const WORKER_PREFETCH = parseInt(process.env.WORKER_PREFETCH ?? '', 10) || 10;
+const MAX_RETRIES = parseInt(process.env.MAX_RETRIES ?? '', 10) || 3;
+const RETRY_DELAY = parseInt(process.env.RETRY_DELAY ?? '', 10) || 5000;
 
 /**
  * Initializes and starts the notification worker process
@@ -54,7 +54,13 @@ export async function startWorker(): Promise<void> {
                         await processMessage(message, notificationService);
                         channel.ack(message);
                     } catch (error) {
-                        await handleError(error, message, channel);
+                        // handleError expects a concrete Error; normalize the
+                        // unknown catch binding before delegating.
+                        await handleError(
+                            error instanceof Error ? error : new Error(String(error)),
+                            message,
+                            channel
+                        );
                     }
                 }
             },

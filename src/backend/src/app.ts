@@ -1,13 +1,22 @@
+// @version reflect-metadata ^0.1.13
 // @version express ^4.18.0
 // @version dotenv ^16.0.0
 // @version compression ^1.7.4
 // @version helmet ^4.6.0
 
+// MUST be the first import: this module transitively loads the DI route
+// aggregator (./api/routes -> recipe/shopping controllers resolved through
+// tsyringe's container.resolve), and tsyringe relies on reflect-metadata's
+// global polyfill being installed before any @injectable/@inject decorated
+// class is evaluated. Importing it here guarantees correct metadata regardless
+// of whether the process is started via ./server or app is imported directly.
+import 'reflect-metadata';
 import express, { Application } from 'express';
 import dotenv from 'dotenv';
 import compression from 'compression';
 import helmet from 'helmet';
 import http from 'http';
+import mongoose from 'mongoose';
 import { connectDatabase } from './config/database';
 import { createRedisClient } from './config/redis';
 import { configureRoutes } from './api/routes';
@@ -192,12 +201,18 @@ export const handleShutdown = async (): Promise<void> => {
 // Export application instance for testing
 export const app = express();
 
-// Start server if not in test environment
-if (process.env.NODE_ENV !== 'test') {
+// Auto-start the application ONLY when this module is executed directly
+// (e.g. `node dist/app.js`), and never under the test runner. The combined
+// entrypoint `server.js` imports this module to reuse `initializeApp` /
+// `startServer`; without the `require.main === module` guard that import would
+// trigger a second, un-clustered boot in addition to server.js's own worker
+// boot (double-listen on the same port). The guard makes app.js independently
+// runnable while keeping server.js the single source of process orchestration.
+if (process.env.NODE_ENV !== 'test' && require.main === module) {
     (async () => {
         try {
-            const app = await initializeApp();
-            await startServer(app);
+            const application = await initializeApp();
+            await startServer(application);
         } catch (error) {
             console.error('Failed to start application:', error);
             process.exit(1);

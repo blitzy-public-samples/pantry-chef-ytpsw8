@@ -138,7 +138,9 @@ export const retryOperation = async <T>(
     operation: () => Promise<T>,
     maxRetries: number = 3
 ): Promise<T> => {
-    let lastError: Error;
+    // Initialized with a default so it is definitely assigned even when maxRetries < 1
+    // (the loop body, which captures the real failure, may never execute).
+    let lastError: Error = new Error('Operation failed');
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {

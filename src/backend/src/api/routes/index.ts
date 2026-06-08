@@ -9,9 +9,12 @@ import helmet from 'helmet';
 import compression from 'compression';
 import router from './analytics.routes';
 import { configureAuthRoutes } from './auth.routes';
+import { AuthController } from '../controllers/auth.controller';
+import { AuthService } from '../../services/auth.service';
 import { recipeRouter } from './recipe.routes';
-import router as pantryRouter from './pantry.routes';
+import pantryRouter from './pantry.routes';
 import userRouter from './user.routes';
+import shoppingRouter from './shopping.routes';
 import { errorHandler } from '../middlewares/error.middleware';
 
 /*
@@ -42,7 +45,7 @@ export const configureRoutes = (app: Application): void => {
                 scriptSrc: ["'self'", "'unsafe-inline'"],
                 styleSrc: ["'self'", "'unsafe-inline'"],
                 imgSrc: ["'self'", 'data:', 'https:'],
-                connectSrc: ["'self'", process.env.API_URL as string],
+                connectSrc: ["'self'", process.env.API_URL].filter(Boolean) as string[],
             },
         },
         referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
@@ -92,17 +95,16 @@ export const configureRoutes = (app: Application): void => {
     // Mount analytics routes with admin-only access
     app.use(`${API_VERSION}/analytics`, router);
 
-    // Mount authentication routes with rate limiting
-    app.use(`${API_VERSION}/auth`, configureAuthRoutes({
-        loginRateLimit: {
-            windowMs: 15 * 60 * 1000, // 15 minutes
-            max: 5 // 5 attempts
-        },
-        passwordResetRateLimit: {
-            windowMs: 60 * 60 * 1000, // 1 hour
-            max: 3 // 3 attempts
-        }
-    }));
+    // Mount authentication routes.
+    // `configureAuthRoutes` requires a fully-constructed `AuthController`. Neither
+    // `AuthController` nor `AuthService` is registered with the tsyringe container (no
+    // `@injectable()` decorator), so they are constructed explicitly here rather than
+    // resolved — mirroring the explicit-construction approach used for the other
+    // non-DI services. The previous config-object argument did not match the
+    // `configureAuthRoutes(authController: AuthController)` signature (TS2345); any
+    // auth rate-limiting is owned inside `auth.routes.ts`, and auth-route limits are
+    // out of the F3 scope (image-upload and recipe-match routes only).
+    app.use(`${API_VERSION}/auth`, configureAuthRoutes(new AuthController(new AuthService())));
 
     // Mount recipe routes with search and matching capabilities
     app.use(`${API_VERSION}/recipes`, recipeRouter);
@@ -112,6 +114,12 @@ export const configureRoutes = (app: Application): void => {
 
     // Mount user routes with profile handling
     app.use(`${API_VERSION}/users`, userRouter);
+
+    // Mount shopping-list routes with server-authoritative, user-scoped CRUD + generation
+    // (Feature 1 - Shopping List Backend Route and Cross-Device Sync). Mounted at
+    // `/api/v1/shopping-lists`; the router applies `authenticate` and the six user-specified
+    // routes resolve `ShoppingController` via tsyringe.
+    app.use(`${API_VERSION}/shopping-lists`, shoppingRouter);
 
     // Health check endpoint
     app.get('/health', (req, res) => {

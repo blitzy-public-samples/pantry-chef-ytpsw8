@@ -69,7 +69,7 @@ export async function authenticate(
         'Authentication failed',
         401,
         'ERR_AUTH_FAILED',
-        { error: error.message }
+        { error: error instanceof Error ? error.message : String(error) }
       ));
     }
   }
@@ -129,16 +129,13 @@ export function authorize(allowedRoles: string[]): (
           'Authorization failed',
           403,
           'ERR_AUTH_FAILED',
-          { error: error.message }
+          { error: error instanceof Error ? error.message : String(error) }
         ));
       }
     }
   };
 }
 
-// Export interfaces and middleware functions
-export {
-  authenticate,
-  authorize,
-  AuthenticatedRequest
-};
+// `authenticate`, `authorize`, and `AuthenticatedRequest` are each already exported at
+// their declaration site above; a redundant `export { ... }` block here would conflict
+// with those declarations (TS2323/TS2484), so it is intentionally omitted.

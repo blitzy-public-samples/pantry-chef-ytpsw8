@@ -45,8 +45,8 @@ export async function initializeWorker(): Promise<void> {
         });
     } catch (error) {
         logger.error('Failed to initialize image processing worker', {
-            error: error.message,
-            stack: error.stack
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
         });
         throw error;
     }
@@ -99,8 +99,8 @@ async function processImageMessage(message: any): Promise<void> {
         });
     } catch (error) {
         logger.error('Failed to process image message', {
-            error: error.message,
-            stack: error.stack,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
             messageId: message?.id
         });
         throw error; // Allow queue service to handle retries
@@ -122,8 +122,8 @@ async function handleShutdown(): Promise<void> {
         process.exit(0);
     } catch (error) {
         logger.error('Error during worker shutdown', {
-            error: error.message,
-            stack: error.stack
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
         });
         process.exit(1);
     }
@@ -137,8 +137,8 @@ process.on('SIGINT', handleShutdown);
 if (require.main === module) {
     initializeWorker().catch((error) => {
         logger.error('Worker initialization failed', {
-            error: error.message,
-            stack: error.stack
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
         });
         process.exit(1);
     });

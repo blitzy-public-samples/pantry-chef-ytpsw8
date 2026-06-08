@@ -86,11 +86,11 @@ export class UserService {
 
             // Remove sensitive data before returning
             const userObject = user.toObject();
-            delete userObject.passwordHash;
+            delete (userObject as Partial<typeof userObject>).passwordHash;
             return userObject;
         } catch (error) {
             this.logger.error('Error creating user', {
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 email: userData.email
             });
             throw error;
@@ -127,7 +127,9 @@ export class UserService {
             const token = jwt.sign(
                 { userId: user.id, email: user.email },
                 process.env.JWT_SECRET!,
-                { expiresIn: process.env.JWT_EXPIRATION || '24h' }
+                // jsonwebtoken@9 types `expiresIn` as `StringValue | number`; the
+                // env value is a plain string, so narrow it to the option's type.
+                { expiresIn: (process.env.JWT_EXPIRATION || '24h') as jwt.SignOptions['expiresIn'] }
             );
 
             // Update last login timestamp
@@ -142,11 +144,11 @@ export class UserService {
 
             // Remove sensitive data before returning
             const userObject = user.toObject();
-            delete userObject.passwordHash;
+            delete (userObject as Partial<typeof userObject>).passwordHash;
             return { token, user: userObject };
         } catch (error) {
             this.logger.error('Authentication error', {
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 email
             });
             throw error;
@@ -182,11 +184,11 @@ export class UserService {
 
             // Remove sensitive data before returning
             const userObject = updatedUser.toObject();
-            delete userObject.passwordHash;
+            delete (userObject as Partial<typeof userObject>).passwordHash;
             return userObject;
         } catch (error) {
             this.logger.error('Error updating user profile', {
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 userId
             });
             throw error;
@@ -216,11 +218,11 @@ export class UserService {
 
             // Remove sensitive data before returning
             const userObject = updatedUser.toObject();
-            delete userObject.passwordHash;
+            delete (userObject as Partial<typeof userObject>).passwordHash;
             return userObject;
         } catch (error) {
             this.logger.error('Error updating user preferences', {
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 userId
             });
             throw error;
@@ -264,11 +266,11 @@ export class UserService {
 
             // Remove sensitive data before returning
             const userObject = updatedUser.toObject();
-            delete userObject.passwordHash;
+            delete (userObject as Partial<typeof userObject>).passwordHash;
             return userObject;
         } catch (error) {
             this.logger.error('Error updating dietary restrictions', {
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 userId
             });
             throw error;
@@ -288,11 +290,11 @@ export class UserService {
 
             // Remove sensitive data before returning
             const userObject = user.toObject();
-            delete userObject.passwordHash;
+            delete (userObject as Partial<typeof userObject>).passwordHash;
             return userObject;
         } catch (error) {
             this.logger.error('Error retrieving user', {
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 userId
             });
             throw error;
@@ -319,7 +321,7 @@ export class UserService {
             });
         } catch (error) {
             this.logger.error('Error deleting user', {
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 userId
             });
             throw error;

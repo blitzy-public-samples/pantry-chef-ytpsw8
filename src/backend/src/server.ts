@@ -1,12 +1,21 @@
+// @version reflect-metadata ^0.1.13
 // @version cluster ^1.0.0
 // @version os ^1.0.0
 // @version dotenv ^16.0.0
 
+// MUST be the very first import in the process entry point: tsyringe's
+// constructor-injection decorators (@injectable / @inject) read parameter type
+// metadata that the TypeScript compiler only emits when reflect-metadata has
+// installed its global Reflect.metadata polyfill. Importing it here (before any
+// decorated class — RecipeController, ShoppingController, the @injectable
+// services — is transitively loaded via ./app) is what lets the application
+// boot under DI exactly as the test harness already does (tests/setup.ts).
+import 'reflect-metadata';
 import cluster from 'cluster';
 import os from 'os';
 import dotenv from 'dotenv';
-import app from './app';
-import { logger } from './config/logger';
+import { initializeApp, startServer } from './app';
+import { logger } from './utils/logger';
 
 // HUMAN TASKS:
 // 1. Configure environment variables in production:
@@ -36,65 +45,20 @@ const SHUTDOWN_TIMEOUT = Number(process.env.SHUTDOWN_TIMEOUT) || 10000;
  */
 async function startWorker(): Promise<void> {
     try {
-        // Create HTTP server and start listening
-        const server = app.listen(PORT, () => {
-            logger.info(`Worker ${process.pid} started and listening on port ${PORT}`);
-        });
+        // Initialize the Express application (security middleware, database, Redis, and the
+        // versioned API routes), then start the combined HTTP + WebSocket server. `startServer`
+        // owns HTTP listen, WebSocket initialization, the /health endpoint, and SIGTERM/SIGINT
+        // graceful shutdown (closing the database, Redis, and the WebSocket server), so this
+        // worker intentionally does not duplicate that wiring. Process-level uncaughtException /
+        // unhandledRejection handlers are installed separately via handleProcessSignals().
+        const application = await initializeApp();
+        await startServer(application);
 
-        // Initialize health check endpoint for container orchestration
-        app.get('/health', (req, res) => {
-            res.status(200).json({
-                status: 'healthy',
-                pid: process.pid,
-                uptime: process.uptime(),
-                memory: process.memoryUsage(),
-                timestamp: new Date().toISOString()
-            });
-        });
-
-        // Handle uncaught exceptions
-        process.on('uncaughtException', (error) => {
-            logger.error('Uncaught exception in worker process', {
-                error: error.message,
-                stack: error.stack,
-                pid: process.pid
-            });
-            process.exit(1);
-        });
-
-        // Handle unhandled promise rejections
-        process.on('unhandledRejection', (reason, promise) => {
-            logger.error('Unhandled rejection in worker process', {
-                reason,
-                pid: process.pid
-            });
-        });
-
-        // Graceful shutdown handler
-        const shutdown = async () => {
-            logger.info(`Worker ${process.pid} starting graceful shutdown`);
-
-            // Stop accepting new connections
-            server.close(() => {
-                logger.info(`Worker ${process.pid} closed all connections`);
-                process.exit(0);
-            });
-
-            // Force shutdown after timeout
-            setTimeout(() => {
-                logger.error(`Worker ${process.pid} shutdown timed out, forcing exit`);
-                process.exit(1);
-            }, SHUTDOWN_TIMEOUT);
-        };
-
-        // Register shutdown handlers
-        process.on('SIGTERM', shutdown);
-        process.on('SIGINT', shutdown);
-
+        logger.info(`Worker ${process.pid} started and listening on port ${PORT}`);
     } catch (error) {
         logger.error('Failed to start worker process', {
-            error: error.message,
-            stack: error.stack,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
             pid: process.pid
         });
         process.exit(1);
@@ -166,8 +130,8 @@ async function startMaster(): Promise<void> {
 
     } catch (error) {
         logger.error('Failed to start master process', {
-            error: error.message,
-            stack: error.stack,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
             pid: process.pid
         });
         process.exit(1);
@@ -183,8 +147,8 @@ function handleProcessSignals(): void {
     // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {
         logger.error('Uncaught exception', {
-            error: error.message,
-            stack: error.stack,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
             pid: process.pid
         });
         process.exit(1);
@@ -204,8 +168,8 @@ if (cluster.isMaster) {
     // Start master process
     startMaster().catch((error) => {
         logger.error('Failed to start master process', {
-            error: error.message,
-            stack: error.stack
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
         });
         process.exit(1);
     });
@@ -214,8 +178,8 @@ if (cluster.isMaster) {
     handleProcessSignals();
     startWorker().catch((error) => {
         logger.error('Failed to start worker process', {
-            error: error.message,
-            stack: error.stack
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
         });
         process.exit(1);
     });

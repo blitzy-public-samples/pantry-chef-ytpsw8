@@ -7,9 +7,10 @@
  * 5. Configure user data backup schedule
  */
 
-import { Router } from 'express'; // ^4.18.0
+import { Router, Request, Response, NextFunction } from 'express'; // ^4.18.0
 import { UserController } from '../controllers/user.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { UserService } from '../../services/user.service';
+import { authenticate, AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { validateRequest } from '../middlewares/validation.middleware';
 import {
     validateRegistration,
@@ -27,8 +28,21 @@ import {
  */
 export const userRouter = Router();
 
-// Initialize UserController
-const userController = new UserController(/* userService will be injected */);
+// Initialize UserController with its UserService dependency.
+// Both classes are plain (non-injectable); UserService has a no-arg constructor
+// that only captures the model/logger references, so manual composition here is
+// safe at module-load time and preserves the established wiring.
+const userController = new UserController(new UserService());
+
+/**
+ * Express-typed wrapper around the authenticate middleware.
+ * authenticate expects an AuthenticatedRequest as its first parameter, which is
+ * contravariantly incompatible with Express's RequestHandler (Request) signature.
+ * This adapter bridges the two without weakening types or duplicating logic.
+ */
+const authGuard = (req: Request, res: Response, next: NextFunction): void => {
+    void authenticate(req as AuthenticatedRequest, res, next);
+};
 
 // Public routes
 /**
@@ -60,7 +74,7 @@ userRouter.post(
  */
 userRouter.get(
     '/profile',
-    authenticate,
+    authGuard,
     userController.getProfile
 );
 
@@ -70,7 +84,7 @@ userRouter.get(
  */
 userRouter.put(
     '/profile',
-    authenticate,
+    authGuard,
     validateProfileUpdate(),
     validateRequest,
     userController.updateProfile
@@ -82,7 +96,7 @@ userRouter.put(
  */
 userRouter.put(
     '/preferences',
-    authenticate,
+    authGuard,
     validatePreferencesUpdate(),
     validateRequest,
     userController.updatePreferences
@@ -94,7 +108,7 @@ userRouter.put(
  */
 userRouter.put(
     '/dietary-restrictions',
-    authenticate,
+    authGuard,
     validateRequest,
     userController.updateDietaryRestrictions
 );
@@ -105,7 +119,7 @@ userRouter.put(
  */
 userRouter.delete(
     '/account',
-    authenticate,
+    authGuard,
     userController.deleteAccount
 );
 

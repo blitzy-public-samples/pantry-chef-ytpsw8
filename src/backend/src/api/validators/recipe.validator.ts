@@ -251,7 +251,7 @@ export const validateRecipeQuery = () => {
             .custom((value) => {
                 if (value) {
                     const ingredients = value.split(',');
-                    return ingredients.every((id) => /^[0-9a-fA-F]{24}$/.test(id));
+                    return ingredients.every((id: string) => /^[0-9a-fA-F]{24}$/.test(id));
                 }
                 return true;
             })

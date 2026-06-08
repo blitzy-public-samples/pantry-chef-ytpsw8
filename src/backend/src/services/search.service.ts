@@ -78,7 +78,7 @@ export class SearchService {
             const results: SearchResult<Recipe> = {
                 items: response.hits.hits.map(hit => ({
                     ...(hit._source as Recipe),
-                    id: hit._id
+                    id: hit._id ?? ''
                 })),
                 total: response.hits.total as number,
                 page,
@@ -137,7 +137,7 @@ export class SearchService {
             const results: SearchResult<Ingredient> = {
                 items: response.hits.hits.map(hit => ({
                     ...(hit._source as Ingredient),
-                    id: hit._id
+                    id: hit._id ?? ''
                 })),
                 total: response.hits.total as number,
                 page: 1,
@@ -193,7 +193,7 @@ export class SearchService {
             const similarRecipes = response.hits.hits
                 .map(hit => ({
                     ...(hit._source as Recipe),
-                    id: hit._id
+                    id: hit._id ?? ''
                 }))
                 .filter(recipe => recipe.id !== recipeId)
                 .slice(0, limit);

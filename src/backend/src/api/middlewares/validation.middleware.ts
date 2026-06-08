@@ -1,6 +1,6 @@
 // @ts-check
 import { Request, Response, NextFunction } from 'express'; // ^4.18.0
-import { validationResult, ValidationChain } from 'express-validator'; // ^6.14.0
+import { body, validationResult, ValidationChain } from 'express-validator'; // ^6.14.0
 import validator from 'validator'; // ^13.7.0
 import { 
     validateEmail, 
@@ -171,34 +171,42 @@ export async function validateRecipeData(recipeData: any): Promise<boolean> {
     return true;
 }
 
-// Helper function to get validation rules based on request path and method
+// Helper function to get validation rules based on request path and method.
+// Rules are express-validator `ValidationChain`s so each exposes the `.run(req)`
+// contract that validateRequest awaits above. (The previous implementation pushed
+// raw `validator` library calls, which return strings/booleans and have no `.run()`
+// method — they neither type-checked against ValidationChain nor worked at runtime.)
 function getValidationRules(path: string, method: string): ValidationChain[] {
     const rules: ValidationChain[] = [];
-    
-    // Add common validation rules for all requests
-    rules.push(
-        // Prevent common injection attacks
-        validator.blacklist('[]<>{}'),
-        // Limit request size
-        validator.isLength({ max: 10000 })
-    );
-    
-    // Add path-specific validation rules
+
+    // Path-specific validation rules. Each field rule is optional so it only
+    // validates the field when present, leaving route-level validators (e.g.
+    // validateSignupRequest / validateLoginRequest) as the authoritative,
+    // required-field validation; these act as a defensive sanitizing layer.
     if (path.includes('/auth')) {
         rules.push(
-            validator.isEmail(),
-            validator.isLength({ min: 8 })
+            body('email')
+                .optional()
+                .isEmail()
+                .withMessage('Invalid email format'),
+            body('password')
+                .optional()
+                .isLength({ min: 8 })
+                .withMessage('Password must be at least 8 characters long')
         );
     }
-    
+
     if (path.includes('/recipes') && method === 'POST') {
         rules.push(
-            validator.isLength({ min: 1 }),
-            validator.trim(),
-            validator.escape()
+            body('name')
+                .optional()
+                .trim()
+                .isLength({ min: 1 })
+                .withMessage('Name must not be empty')
+                .escape()
         );
     }
-    
+
     return rules;
 }
 

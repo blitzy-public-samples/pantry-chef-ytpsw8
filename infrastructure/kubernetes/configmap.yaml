@@ -24,6 +24,8 @@ data:
   MONGODB_PORT: "27017"
   
   # Requirement: System Components Configuration - Redis settings
+  # Discrete REDIS_HOST/REDIS_PORT are consumed by createRedisClient()
+  # (src/backend/src/config/redis.ts) for cache AND the Socket.IO Redis adapter (Feature 2).
   REDIS_HOST: "redis-service"
   REDIS_PORT: "6379"
   

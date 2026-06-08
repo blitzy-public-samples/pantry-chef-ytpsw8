@@ -92,9 +92,9 @@ export const useShoppingList = () => {
    * Generate a shopping list from recipes
    * Requirement: Shopping List Generation (1.2 Scope/Core Capabilities)
    */
-  const generateList = useCallback(async (options: ShoppingListGenerationOptions) => {
+  const generateList = useCallback(async (id: string, options: ShoppingListGenerationOptions) => {
     try {
-      await dispatch(generateShoppingList(options)).unwrap();
+      await dispatch(generateShoppingList({ id, options })).unwrap();
     } catch (error) {
       throw new Error(`Failed to generate shopping list: ${error}`);
     }

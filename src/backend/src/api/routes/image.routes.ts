@@ -7,13 +7,24 @@
  * 5. Configure CDN caching policies for processed images
  */
 
-import express, { Router } from 'express'; // ^4.18.0
+import express, { Router, Request, Response, NextFunction } from 'express'; // ^4.18.0
 import rateLimit from 'express-rate-limit'; // ^6.7.0
 import { ImageController } from '../controllers/image.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authenticate, AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { uploadMiddleware } from '../middlewares/upload.middleware';
 import { validateImageUpload } from '../validators/image.validator';
 import logger from '../../utils/logger';
+
+/**
+ * Synchronous, void-returning wrapper around `authenticate`. The middleware is typed against
+ * `AuthenticatedRequest` and returns a Promise, whereas Express's `RequestHandler` expects a
+ * plain `Request` (contravariant position) and a `void` return. This wrapper upcasts the request
+ * and discards the promise so `authenticate` satisfies the route-registration overloads.
+ */
+const authGuard = (req: Request, res: Response, next: NextFunction): void => {
+    void authenticate(req as AuthenticatedRequest, res, next);
+};
+import { imageUploadLimiter } from '../middlewares/rateLimiter.middleware';
 
 /**
  * Configures and returns the Express router with secure image processing endpoints
@@ -24,15 +35,6 @@ import logger from '../../utils/logger';
  */
 const configureImageRoutes = (imageController: ImageController): Router => {
     const router = express.Router();
-
-    // Configure rate limiting for image upload endpoints
-    const uploadRateLimiter = rateLimit({
-        windowMs: 15 * 60 * 1000, // 15 minutes
-        max: 10, // Limit each IP to 10 requests per windowMs
-        message: 'Too many image uploads from this IP, please try again later',
-        standardHeaders: true,
-        legacyHeaders: false
-    });
 
     // Configure rate limiting for recognition results endpoint
     const recognitionRateLimiter = rateLimit({
@@ -59,11 +61,11 @@ const configureImageRoutes = (imageController: ImageController): Router => {
      */
     router.post(
         '/upload',
-        authenticate,
-        uploadRateLimiter,
+        authGuard,
+        imageUploadLimiter,
         validateImageUpload,
         uploadMiddleware,
-        async (req, res, next) => {
+        async (req: Request, res: Response, next: NextFunction) => {
             try {
                 logger.info('Processing image upload request', {
                     userId: req.user?.id,
@@ -72,8 +74,8 @@ const configureImageRoutes = (imageController: ImageController): Router => {
                 await imageController.uploadImage(req, res, next);
             } catch (error) {
                 logger.error('Image upload route error', {
-                    error: error.message,
-                    stack: error.stack,
+                    error: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
                     userId: req.user?.id
                 });
                 next(error);
@@ -91,9 +93,9 @@ const configureImageRoutes = (imageController: ImageController): Router => {
      */
     router.get(
         '/recognition/:imageId',
-        authenticate,
+        authGuard,
         recognitionRateLimiter,
-        async (req, res, next) => {
+        async (req: Request, res: Response, next: NextFunction) => {
             try {
                 logger.info('Processing recognition results request', {
                     imageId: req.params.imageId,
@@ -102,8 +104,8 @@ const configureImageRoutes = (imageController: ImageController): Router => {
                 await imageController.getRecognitionResults(req, res, next);
             } catch (error) {
                 logger.error('Recognition results route error', {
-                    error: error.message,
-                    stack: error.stack,
+                    error: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
                     imageId: req.params.imageId,
                     userId: req.user?.id
                 });

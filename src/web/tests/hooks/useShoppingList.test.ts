@@ -83,7 +83,9 @@ describe('useShoppingList', () => {
     (ShoppingService.updateShoppingList as jest.Mock).mockResolvedValue(mockShoppingList);
     (ShoppingService.deleteShoppingList as jest.Mock).mockResolvedValue(undefined);
     (ShoppingService.generateShoppingList as jest.Mock).mockResolvedValue(mockShoppingList);
-    (ShoppingService.updateShoppingListItem as jest.Mock).mockResolvedValue(mockShoppingList.items[0]);
+    // The toggle route resolves to the FULL updated list (backend authoritative
+    // contract), so the mock returns the whole list, not a single item.
+    (ShoppingService.updateShoppingListItem as jest.Mock).mockResolvedValue(mockShoppingList);
     (ShoppingService.filterShoppingList as jest.Mock).mockResolvedValue(mockShoppingList.items);
   });
 
@@ -164,10 +166,10 @@ describe('useShoppingList', () => {
     };
 
     await act(async () => {
-      await result.current.generateList(options);
+      await result.current.generateList('1', options);
     });
 
-    expect(ShoppingService.generateShoppingList).toHaveBeenCalledWith(options);
+    expect(ShoppingService.generateShoppingList).toHaveBeenCalledWith('1', options);
   });
 
   /**

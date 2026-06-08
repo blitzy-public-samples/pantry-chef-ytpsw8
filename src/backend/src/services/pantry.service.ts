@@ -127,15 +127,19 @@ export class PantryService {
             // Validate item data
             this.validatePantryItem(item);
 
-            // Add item to pantry
-            const pantry = await this.getPantry(userId);
-            await PantryModel.addItem(item);
+            // Fetch the user's pantry document directly so the schema instance
+            // methods are available and we mutate the live (non-cached) document.
+            const pantryDoc = await PantryModel.findOne({ userId });
+            if (!pantryDoc) {
+                throw new AppError('Pantry not found', 404, 'PANTRY_NOT_FOUND');
+            }
+            await pantryDoc.addItem(item);
 
             // Update cache
             await this.cacheService.delete(`${this.CACHE_PREFIX}${userId}`);
 
             // Queue expiration check
-            await this.queueService.publishToQueue('expiration-check', {
+            await QueueService.publishToQueue('expiration-check', {
                 userId,
                 itemId: item.ingredientId,
                 expirationDate: item.expirationDate
@@ -170,9 +174,13 @@ export class PantryService {
      */
     public async removeItem(userId: string, itemId: string): Promise<void> {
         try {
-            // Remove item from pantry
-            const pantry = await this.getPantry(userId);
-            await PantryModel.removeItem(itemId);
+            // Fetch the user's pantry document directly so the schema instance
+            // methods are available and we mutate the live (non-cached) document.
+            const pantryDoc = await PantryModel.findOne({ userId });
+            if (!pantryDoc) {
+                throw new AppError('Pantry not found', 404, 'PANTRY_NOT_FOUND');
+            }
+            await pantryDoc.removeItem(itemId);
 
             // Update cache
             await this.cacheService.delete(`${this.CACHE_PREFIX}${userId}`);
@@ -215,9 +223,13 @@ export class PantryService {
                 throw new AppError('Invalid quantity value', 400, 'INVALID_QUANTITY');
             }
 
-            // Update item quantity
-            const pantry = await this.getPantry(userId);
-            await PantryModel.updateItemQuantity(itemId, quantity);
+            // Fetch the user's pantry document directly so the schema instance
+            // methods are available and we mutate the live (non-cached) document.
+            const pantryDoc = await PantryModel.findOne({ userId });
+            if (!pantryDoc) {
+                throw new AppError('Pantry not found', 404, 'PANTRY_NOT_FOUND');
+            }
+            await pantryDoc.updateItemQuantity(itemId, quantity);
 
             // Update cache
             await this.cacheService.delete(`${this.CACHE_PREFIX}${userId}`);
@@ -294,8 +306,11 @@ export class PantryService {
      */
     public async getPantryStats(userId: string): Promise<PantryStats> {
         try {
-            const pantry = await this.getPantry(userId);
-            const stats = await PantryModel.getStats();
+            const pantryDoc = await PantryModel.findOne({ userId });
+            if (!pantryDoc) {
+                throw new AppError('Pantry not found', 404, 'PANTRY_NOT_FOUND');
+            }
+            const stats = await pantryDoc.getStats();
 
             logger.info('Pantry stats retrieved successfully', {
                 userId,

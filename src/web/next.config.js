@@ -5,8 +5,65 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true'
 });
 
-// Import API configuration constants
-const { BASE_URL } = require('./src/config/constants');
+// API base URL for the `env` block below. This file is plain CommonJS executed
+// by Node during `next build`/`next dev`, so it CANNOT `require('./src/config/constants')`
+// (a TypeScript module Node cannot load) — doing so threw at config evaluation and
+// prevented the dev/build server from booting. We instead read the same env var the
+// TS `API_CONFIG.BASE_URL` reads, with the identical localhost fallback, so behavior
+// is unchanged.
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api/v1';
+
+// Build the Content-Security-Policy `connect-src` allowlist.
+//
+// The web app issues XHR/fetch and WebSocket requests to the backend API and realtime
+// origins. In non-production environments those origins differ from the web origin (for
+// example the web app runs on :3001 while the backend API/Socket.IO server runs on :3000),
+// so a static `connect-src` of only `'self' https://*.pantrychef.com wss://*.pantrychef.com`
+// blocks every shopping-list sync call before it reaches the backend.
+//
+// The production PantryChef origins are always retained, so production remains restricted
+// to approved `*.pantrychef.com` API/WS origins. In addition, the backend origin actually
+// configured for this build is derived from the SAME env vars the app reads
+// (NEXT_PUBLIC_API_BASE_URL via BASE_URL, and NEXT_PUBLIC_WS_URL) and appended — both its
+// http(s) origin (for REST) and the matching ws(s) origin (for the Socket.IO upgrade).
+// Malformed/empty values are skipped defensively so a bad env var can never weaken the CSP.
+const buildConnectSrc = () => {
+  const sources = new Set([
+    "'self'",
+    'https://*.pantrychef.com',
+    'wss://*.pantrychef.com'
+  ]);
+
+  const addOrigin = (rawUrl) => {
+    if (!rawUrl) {
+      return;
+    }
+    try {
+      // `URL.origin` strips any path (e.g. '/api/v1'), leaving scheme://host[:port].
+      const { origin, protocol } = new URL(rawUrl);
+      sources.add(origin);
+      // Allow the corresponding WebSocket (or REST) sibling origin so both transports work.
+      if (protocol === 'https:') {
+        sources.add(origin.replace(/^https:/, 'wss:'));
+      } else if (protocol === 'http:') {
+        sources.add(origin.replace(/^http:/, 'ws:'));
+      } else if (protocol === 'wss:') {
+        sources.add(origin.replace(/^wss:/, 'https:'));
+      } else if (protocol === 'ws:') {
+        sources.add(origin.replace(/^ws:/, 'http:'));
+      }
+    } catch (_err) {
+      // Ignore malformed URLs — never broaden or break the CSP because of a bad env value.
+    }
+  };
+
+  addOrigin(BASE_URL);
+  addOrigin(process.env.NEXT_PUBLIC_WS_URL);
+
+  return Array.from(sources).join(' ');
+};
+
+const CONNECT_SRC = buildConnectSrc();
 
 /**
  * HUMAN TASKS:
@@ -48,7 +105,7 @@ const nextConfig = {
                    "style-src 'self' 'unsafe-inline'; " +
                    "img-src 'self' data: https://*.pantrychef.com https://*.amazonaws.com; " +
                    "font-src 'self'; " +
-                   "connect-src 'self' https://*.pantrychef.com wss://*.pantrychef.com"
+                   "connect-src " + CONNECT_SRC
           },
           {
             key: 'X-Frame-Options',
@@ -112,25 +169,15 @@ const nextConfig = {
       config.optimization.minimize = true;
     }
 
-    // Add custom webpack rules
-    config.module.rules.push(
-      // TypeScript/JavaScript processing
-      {
-        test: /\.(ts|js)x?$/,
-        exclude: /node_modules/,
-        use: {
-          loader: 'babel-loader',
-          options: {
-            presets: ['next/babel']
-          }
-        }
-      },
-      // CSS/SASS processing
-      {
-        test: /\.scss$/,
-        use: ['style-loader', 'css-loader', 'sass-loader']
-      }
-    );
+    // NOTE: previously this pushed two custom module rules that broke every build:
+    //   (1) a `babel-loader` rule for ts/js — `babel-loader` is not installed AND it
+    //       duplicated/overrode Next 13's built-in SWC transpilation, 500-ing every page;
+    //   (2) a `style-loader/css-loader/sass-loader` rule for `.scss` that DISABLED Next's
+    //       built-in CSS pipeline, so `src/styles/globals.css` (which uses `@tailwind`
+    //       directives handled by postcss.config.js + tailwind.config.js) failed with
+    //       "Unexpected character '@'", 500-ing every page.
+    // Both are removed: Next 13's built-in SWC + PostCSS/Tailwind pipeline already handles
+    // TS/JS and CSS (including SCSS) natively. The splitChunks/minimize tuning above is kept.
 
     return config;
   },

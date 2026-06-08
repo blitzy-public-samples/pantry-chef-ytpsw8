@@ -9,15 +9,24 @@
  * 5. Configure role-based access control matrix for recipe operations
  */
 
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { RecipeController } from '../controllers/recipe.controller';
-import { authenticate, authorize } from '../middlewares/auth.middleware';
-import { rateLimiterMiddleware } from '../middlewares/rateLimiter.middleware';
+// RecipeService is a plain (non-tsyringe) class whose constructor requires its
+// collaborators, so the controller's dependency tree is composed manually here
+// (mirroring how the controller was always intended to be constructed). Each
+// collaborator is safe to instantiate at module load: SearchService defaults
+// its Elasticsearch client, CacheService lazily creates its Redis client, and
+// QueueService's connection is established separately at startup.
+import { RecipeService } from '../../services/recipe.service';
+import { SearchService } from '../../services/search.service';
+import { CacheService } from '../../services/cache.service';
+import { QueueService } from '../../services/queue.service';
+import { authenticate, authorize, AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { rateLimiterMiddleware, recipeMatchLimiter } from '../middlewares/rateLimiter.middleware';
 import {
     validateCreateRecipe,
     validateUpdateRecipe,
-    validateRecipeQuery,
-    validateRecipeRating
+    validateRecipeQuery
 } from '../validators/recipe.validator';
 
 /**
@@ -28,6 +37,20 @@ import {
  * - Recipe Sharing (1.2 Scope/Core Capabilities)
  * - Security Architecture (5.6 Security Architecture/Application)
  */
+/**
+ * Synchronous, void-returning wrappers around the auth middlewares. `authenticate` and the
+ * middleware produced by `authorize(...)` are typed against `AuthenticatedRequest` and return a
+ * Promise; Express's `RequestHandler` expects a plain `Request` (contravariant position) and a
+ * `void` return. These wrappers upcast the request and discard the promise so the middlewares
+ * satisfy the route-registration overloads without a floating rejection.
+ */
+const authGuard = (req: Request, res: Response, next: NextFunction): void => {
+    void authenticate(req as AuthenticatedRequest, res, next);
+};
+const requireRoles = (roles: string[]) => (req: Request, res: Response, next: NextFunction): void => {
+    void authorize(roles)(req as AuthenticatedRequest, res, next);
+};
+
 export class RecipeRouter {
     private router: Router;
     private recipeController: RecipeController;
@@ -47,8 +70,8 @@ export class RecipeRouter {
         // Create new recipe (protected, requires user/admin role)
         this.router.post(
             '/',
-            authenticate,
-            authorize(['user', 'admin']),
+            authGuard,
+            requireRoles(['user', 'admin']),
             validateCreateRecipe(),
             rateLimiterMiddleware({
                 points: 10,
@@ -72,8 +95,8 @@ export class RecipeRouter {
         // Update recipe (protected, requires user/admin role)
         this.router.put(
             '/:id',
-            authenticate,
-            authorize(['user', 'admin']),
+            authGuard,
+            requireRoles(['user', 'admin']),
             validateUpdateRecipe(),
             rateLimiterMiddleware({
                 points: 20,
@@ -86,8 +109,8 @@ export class RecipeRouter {
         // Delete recipe (protected, requires user/admin role)
         this.router.delete(
             '/:id',
-            authenticate,
-            authorize(['user', 'admin']),
+            authGuard,
+            requireRoles(['user', 'admin']),
             rateLimiterMiddleware({
                 points: 10,
                 duration: 3600,
@@ -111,28 +134,22 @@ export class RecipeRouter {
         // Find recipes by ingredients (protected, rate limited)
         this.router.post(
             '/match',
-            authenticate,
-            rateLimiterMiddleware({
-                points: 30,
-                duration: 3600,
-                keyPrefix: 'recipe:match'
-            }),
+            authGuard,
+            recipeMatchLimiter,
             this.recipeController.findRecipesByIngredients.bind(this.recipeController)
         );
 
-        // Rate recipe (protected, requires user role)
-        this.router.post(
-            '/:id/rate',
-            authenticate,
-            authorize(['user']),
-            validateRecipeRating(),
-            rateLimiterMiddleware({
-                points: 10,
-                duration: 3600,
-                keyPrefix: 'recipe:rate'
-            }),
-            this.recipeController.rateRecipe.bind(this.recipeController)
-        );
+        // NOTE: the previously-scaffolded `POST /:id/rate` route was removed. It
+        // bound to `RecipeController.rateRecipe` — a method that was never
+        // implemented (there is no corresponding `RecipeService` rating method
+        // either) — so `this.recipeController.rateRecipe.bind(...)` threw
+        // `TypeError: Cannot read properties of undefined (reading 'bind')` at
+        // module load. That throw prevented the recipe router, the route
+        // aggregator (routes/index.ts), and therefore the entire application
+        // from initializing — which in turn blocked the in-scope shopping e2e
+        // suite that boots the app via initializeApp(). Recipe rating is out of
+        // this change set's scope, so the dead-on-arrival route is removed
+        // rather than stubbed (no placeholder is introduced).
     }
 
     /**
@@ -145,6 +162,8 @@ export class RecipeRouter {
 }
 
 // Export configured router instance
-const recipeController = new RecipeController();
+const recipeController = new RecipeController(
+    new RecipeService(new SearchService(), new CacheService(), new QueueService())
+);
 const recipeRouter = new RecipeRouter(recipeController).getRouter();
 export { recipeRouter };

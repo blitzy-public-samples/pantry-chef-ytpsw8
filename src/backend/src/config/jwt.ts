@@ -46,6 +46,3 @@ export const jwtConfig: JWTConfig = {
   // Restrict allowed algorithms to prevent algorithm switching attacks
   allowedAlgorithms: ['HS256']
 };
-
-// Export the interface for type checking across the application
-export type { JWTConfig };

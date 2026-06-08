@@ -1,11 +1,11 @@
-import { injectable } from 'tsyringe'; // ^3.0.0
+import { injectable, container } from 'tsyringe'; // ^3.0.0
 import { Server } from 'socket.io'; // ^4.6.0
 import * as admin from 'firebase-admin'; // ^11.0.0
 import nodemailer, { Transporter } from 'nodemailer'; // ^6.9.0
 import { Channel } from 'amqplib'; // ^0.10.0
-import { NotificationSettings, UserPreferences } from '../interfaces/user.interface';
+import { NotificationSettings, UserPreferences, Theme, MeasurementSystem, SkillLevel } from '../interfaces/user.interface';
 import { logger } from '../utils/logger';
-import { createChannel } from '../config/rabbitmq';
+import { createChannel, createConnection } from '../config/rabbitmq';
 
 // HUMAN TASKS:
 // 1. Configure Firebase Admin SDK credentials in environment:
@@ -23,21 +23,35 @@ import { createChannel } from '../config/rabbitmq';
  */
 @injectable()
 export class NotificationService {
-    private rabbitmqChannel: Channel;
-    private firebaseApp: admin.app.App;
-    private socketServer: Server;
-    private emailTransporter: Transporter;
+    // Initialized asynchronously in `initialize()` (invoked fire-and-forget from the
+    // constructor); definite-assignment assertions reflect post-construction
+    // assignment without altering the init flow.
+    private rabbitmqChannel!: Channel;
+    private firebaseApp!: admin.app.App;
+    // Optional: only the WebSocket process binds a live Socket.IO Server (socket.ts constructs
+    // `new NotificationService(this.io)`). The HTTP dependency-injection graph resolves this
+    // service WITHOUT a server (see the module-scope container registration at the end of this
+    // file), and the notification worker constructs it as `new NotificationService(undefined)`.
+    private socketServer?: Server;
+    private emailTransporter!: Transporter;
     private readonly NOTIFICATION_QUEUE = process.env.NOTIFICATION_QUEUE || 'notifications';
 
     /**
      * Initializes notification service with required connections and configurations
      * Addresses requirement: Push Notifications - Service initialization
      */
-    constructor(socketServer: Server) {
+    constructor(socketServer?: Server) {
         this.socketServer = socketServer;
+        // Graceful degradation: initialize() is intentionally not awaited here (it runs
+        // asynchronously after construction). If initialization of an optional notification
+        // dependency fails (e.g., Firebase/SMTP credentials are absent in this environment,
+        // or RabbitMQ is unreachable), log the failure and continue rather than re-throwing.
+        // Re-throwing from this floating promise would surface as a process-level
+        // unhandledRejection and prevent the application from booting to a healthy state even
+        // though the core HTTP + WebSocket server is fully operational. Each send* method guards
+        // its own dependency, so a degraded notification subsystem cannot crash request handling.
         this.initialize().catch(error => {
-            logger.error('Failed to initialize notification service', { error });
-            throw error;
+            logger.error('Failed to initialize notification service; continuing with notification subsystem degraded', { error });
         });
     }
 
@@ -47,17 +61,26 @@ export class NotificationService {
      */
     private async initialize(): Promise<void> {
         try {
-            // Initialize Firebase Admin SDK
-            const firebaseCredentials = JSON.parse(process.env.FIREBASE_CREDENTIALS);
-            this.firebaseApp = admin.initializeApp({
-                credential: admin.credential.cert(firebaseCredentials)
-            });
+            // Initialize Firebase Admin SDK. The default Firebase app is a process-global
+            // singleton; this service can be constructed more than once during boot (e.g., once
+            // per controller resolved through tsyringe, plus the explicit instance created by the
+            // WebSocket server), so guard against re-initializing the default app, which would
+            // otherwise throw an "app/duplicate-app" error on every subsequent construction.
+            const firebaseCredentials = JSON.parse(process.env.FIREBASE_CREDENTIALS ?? '');
+            this.firebaseApp = admin.apps.length > 0
+                ? admin.app()
+                : admin.initializeApp({
+                    credential: admin.credential.cert(firebaseCredentials)
+                });
 
-            // Initialize RabbitMQ channel
-            this.rabbitmqChannel = await createChannel(await createChannel(undefined));
+            // Initialize RabbitMQ channel from a freshly opened connection, matching
+            // the connection→channel pattern used by the queue service. (The prior
+            // nested `createChannel(createChannel(undefined))` passed a Channel where
+            // a connection ChannelModel is required and could not type-check.)
+            this.rabbitmqChannel = await createChannel(await createConnection());
 
             // Initialize SMTP transport
-            const smtpConfig = JSON.parse(process.env.SMTP_CONFIG);
+            const smtpConfig = JSON.parse(process.env.SMTP_CONFIG ?? '');
             this.emailTransporter = nodemailer.createTransport(smtpConfig);
 
             // Start notification queue processor
@@ -151,15 +174,33 @@ export class NotificationService {
      */
     public async sendWebSocketNotification(userId: string, notificationData: any): Promise<void> {
         try {
-            // Verify active socket connection
-            const userSocket = this.socketServer.sockets.sockets.get(userId);
-            if (!userSocket) {
+            // When this service is resolved through the HTTP dependency-injection graph it has no
+            // live Socket.IO Server bound (the module-scope registration below supplies
+            // `undefined`); only the WebSocket process constructs it with a real `io`. With no
+            // server bound there is no socket to emit to, so skip gracefully instead of
+            // dereferencing an undefined server.
+            const socketServer = this.socketServer;
+            if (socketServer === undefined) {
+                logger.warn('No Socket.IO server bound; skipping WebSocket notification', { userId });
+                return;
+            }
+
+            // Verify an active socket connection exists for the user across ALL backend
+            // instances. The previous check, `socketServer.sockets.sockets.get(userId)`,
+            // was doubly incorrect: that Map is keyed by socket id (not user id), so it
+            // effectively never matched, and it only inspected sockets attached to the
+            // current process. `socketServer.in(userId).fetchSockets()` consults the Redis
+            // adapter, returning the user's sockets on any node, so presence detection is
+            // correct under horizontal scale.
+            const activeSockets = await socketServer.in(userId).fetchSockets();
+            if (activeSockets.length === 0) {
                 logger.warn('No active socket connection for user', { userId });
                 return;
             }
 
-            // Emit notification to user's socket room
-            this.socketServer.to(userId).emit('notification', {
+            // Emit notification to user's socket room. The room emit is itself adapter-aware,
+            // so it fans out to the user's sockets regardless of which instance they are on.
+            socketServer.to(userId).emit('notification', {
                 type: notificationData.type,
                 payload: notificationData.payload,
                 timestamp: new Date().toISOString()
@@ -290,9 +331,9 @@ export class NotificationService {
         // Implementation would fetch user preferences from database
         // Placeholder for demonstration
         return {
-            theme: 'LIGHT',
+            theme: Theme.LIGHT,
             language: 'en',
-            measurementSystem: 'METRIC',
+            measurementSystem: MeasurementSystem.METRIC,
             notificationSettings: {
                 expirationAlerts: true,
                 lowStockAlerts: true,
@@ -301,7 +342,7 @@ export class NotificationService {
                 pushNotifications: true
             },
             cuisinePreferences: [],
-            skillLevel: 'INTERMEDIATE'
+            skillLevel: SkillLevel.INTERMEDIATE
         };
     }
 
@@ -314,5 +355,28 @@ export class NotificationService {
         return [];
     }
 }
+
+// ---------------------------------------------------------------------------
+// Dependency-injection registration for the Socket.IO Server token.
+//
+// `NotificationService` is `@injectable()` and declares a `Server` (socket.io)
+// constructor parameter. tsyringe emits `design:paramtypes = [Server]` for it,
+// so any resolution of this service — or of any service that injects it
+// (e.g. PantryService -> NotificationService, reached when the HTTP route
+// modules call `container.resolve(PantryController)` / `container.resolve(
+// ShoppingController)` at module-load time) — forces tsyringe to construct a
+// `Server`. `Server` is neither `@injectable()` nor registered, which makes
+// tsyringe throw "TypeInfo not known for class Server ...", crashing the HTTP
+// process before it can listen.
+//
+// The WebSocket process never relies on this: socket.ts constructs
+// `new NotificationService(this.io)` explicitly with the live server. For the
+// HTTP path no live server exists, so we register a factory that yields
+// `undefined`; `sendWebSocketNotification` guards against the absent server and
+// no-ops. A `useFactory` provider is required here — `useValue: undefined` is
+// rejected by tsyringe 3.4.0 ("TypeInfo not known for [object Object]").
+container.register(Server, {
+    useFactory: (): Server => undefined as unknown as Server
+});
 
 export default NotificationService;

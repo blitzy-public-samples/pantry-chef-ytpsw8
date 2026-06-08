@@ -33,10 +33,35 @@ function formatErrorResponse(error: Error, req: Request): Record<string, any> {
             error: {
                 code: error.code,
                 message: error.message,
-                context: error.context,
                 statusCode: error.statusCode,
+                ...(process.env.NODE_ENV === 'development' && { context: error.context }),
                 ...(error instanceof ValidationError && {
                     validationErrors: error.validationErrors
+                })
+            }
+        };
+    }
+
+    // Handle malformed JSON request bodies as 400 Bad Request.
+    // Express's `express.json()` body parser throws a `SyntaxError` when a request
+    // payload cannot be parsed as JSON. body-parser tags that error with
+    // `type === 'entity.parse.failed'` and attaches the offending `body`. Without this
+    // branch the error would fall through to the generic handler below and surface as an
+    // opaque HTTP 500, leaking an internal-error response for what is purely a client
+    // input problem. Mapping it to the unified 400 envelope keeps malformed input safe
+    // and contract-correct.
+    if (
+        error instanceof SyntaxError &&
+        ((error as { type?: string }).type === 'entity.parse.failed' || 'body' in error)
+    ) {
+        return {
+            ...baseResponse,
+            error: {
+                code: ERROR_CODES.BAD_REQUEST,
+                message: 'Malformed JSON in request body',
+                statusCode: HTTP_STATUS.BAD_REQUEST,
+                ...(process.env.NODE_ENV === 'development' && {
+                    originalMessage: error.message
                 })
             }
         };

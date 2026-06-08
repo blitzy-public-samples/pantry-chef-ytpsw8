@@ -23,9 +23,9 @@ const DB_NAME = process.env.DB_NAME || 'pantrychef';
 const DB_USER = process.env.DB_USER;
 const DB_PASSWORD = process.env.DB_PASSWORD;
 const DB_REPLICA_SET = process.env.DB_REPLICA_SET;
-const DB_MAX_POOL_SIZE = parseInt(process.env.DB_MAX_POOL_SIZE) || 10;
+const DB_MAX_POOL_SIZE = parseInt(process.env.DB_MAX_POOL_SIZE ?? '', 10) || 10;
 const DB_KEEP_ALIVE = process.env.DB_KEEP_ALIVE === 'true';
-const DB_SOCKET_TIMEOUT = parseInt(process.env.DB_SOCKET_TIMEOUT) || 30000;
+const DB_SOCKET_TIMEOUT = parseInt(process.env.DB_SOCKET_TIMEOUT ?? '', 10) || 30000;
 
 /**
  * Retrieves database configuration options based on environment with support for replica sets
@@ -106,10 +106,12 @@ export const connectDatabase = async (): Promise<void> => {
         });
 
     } catch (error) {
+        // `error` is typed `unknown` under strict mode; narrow before reading `.message`/`.stack`.
+        const err = error instanceof Error ? error : new Error(String(error));
         logger.error('Failed to connect to MongoDB', {
-            error: error.message,
+            error: err.message,
             code: ERROR_CODES.INTERNAL_SERVER_ERROR,
-            stack: error.stack
+            stack: err.stack
         });
         throw error;
     }
@@ -126,14 +128,13 @@ export const closeDatabaseConnection = async (): Promise<void> => {
             logger.info('MongoDB connection closed successfully');
         }
     } catch (error) {
+        // `error` is typed `unknown` under strict mode; narrow before reading `.message`/`.stack`.
+        const err = error instanceof Error ? error : new Error(String(error));
         logger.error('Error closing MongoDB connection', {
-            error: error.message,
+            error: err.message,
             code: ERROR_CODES.INTERNAL_SERVER_ERROR,
-            stack: error.stack
+            stack: err.stack
         });
         throw error;
     }
 };
-
-// Export database configuration functions
-export { getDatabaseConfig, connectDatabase, closeDatabaseConnection };

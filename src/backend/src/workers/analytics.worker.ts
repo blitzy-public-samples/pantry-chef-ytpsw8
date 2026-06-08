@@ -2,6 +2,7 @@
 // @version moment ^2.29.0
 
 import { AnalyticsService } from '../services/analytics.service';
+import { CacheService } from '../services/cache.service';
 import { QueueService } from '../services/queue.service';
 import { logger } from '../utils/logger';
 import { 
@@ -23,6 +24,11 @@ import {
 
 // Queue name constant from environment variable
 const ANALYTICS_QUEUE = process.env.ANALYTICS_QUEUE || 'analytics_queue';
+
+// Analytics service instance backing the worker's message handlers.
+// AnalyticsService depends on CacheService (Redis-backed, lazily connected),
+// matching the construction pattern used elsewhere in the service layer.
+const analyticsService = new AnalyticsService(new CacheService());
 
 /**
  * Processes user activity analytics messages from the queue
