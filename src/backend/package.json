@@ -7,6 +7,12 @@
   "engines": {
     "node": ">=20.20.2"
   },
+  "config": {
+    "mongodbMemoryServer": {
+      "version": "6.0.14",
+      "distro": "ubuntu-22.04"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
